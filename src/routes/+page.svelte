@@ -152,7 +152,8 @@
         error = "";
 
         try {
-            const res = await fetch("https://localhost:7032/analyze", {
+            const API_BASE = import.meta.env.VITE_API_BASE_URL;
+            const res = await fetch(`${API_BASE}/analyze`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
