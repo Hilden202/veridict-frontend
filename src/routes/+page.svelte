@@ -342,27 +342,6 @@
         </section>
 
         <aside class="right-rail">
-            <a
-                class="tarot-card"
-                href="https://tarot.hildenmedia.se"
-                target="_blank"
-                rel="noreferrer"
-            >
-                <div class="tarot-top">
-                    <span>Tarot</span>
-                </div>
-                <div class="tarot-copy">
-                    <h2>Tarot Reading</h2>
-                    <p>Ask a question and gain a new perspective.</p>
-                    <strong>Start reading</strong>
-                </div>
-                <div class="tarot-deck" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </a>
-
             <section class="meta-panel">
                 <div class="meta-list">
                     <div>
@@ -737,7 +716,7 @@
     .right-rail {
         display: grid;
         align-content: start;
-        gap: 24px;
+        gap: 12px;
         min-width: 0;
         position: relative;
         z-index: 0;
@@ -889,6 +868,7 @@
         overflow: hidden;
         position: relative;
         z-index: 2;
+        margin-top: -18px;
     }
 
     .meta-list {
