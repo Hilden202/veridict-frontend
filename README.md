@@ -1,42 +1,145 @@
-# sv
+# Veridict Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+🌐 Live site: https://veridict.hildenmedia.se
 
-## Creating a project
+---
 
-If you're seeing this, you've probably already done this step. Congrats!
+Veridict is an AI-powered platform that analyzes and ranks websites based on **actual quality**, not popularity.
 
-```sh
-# create a new project
-npx sv create my-app
+This repository contains the **public frontend** for Veridict, built with SvelteKit and deployed via GitHub Pages.
+
+---
+
+## 🧠 What is Veridict?
+
+Most platforms rank content based on:
+- SEO
+- backlinks
+- traffic
+
+Veridict does something different.
+
+It evaluates websites based on:
+- relevance to intent
+- practical value
+- clarity and structure
+- signal vs noise
+
+The goal is simple:
+
+> Help users find what is actually useful — not what is most visible.
+
+---
+
+## ⚙️ How it works
+
+1. Enter a website URL  
+2. The frontend sends a request to the Veridict API  
+3. The API:
+   - fetches the content
+   - analyzes it using AI
+   - stores the result  
+4. The result is returned and displayed  
+
+Subsequent requests reuse stored data to avoid unnecessary AI calls.
+
+---
+
+## 🧪 Tech Stack
+
+- **SvelteKit** – frontend framework  
+- **Vite** – build tool  
+- **GitHub Pages** – hosting  
+- **Render** – backend hosting (API)  
+
+---
+
+## 🌐 Environment Configuration
+
+The frontend uses environment variables for API communication.
+
+### Local development
+
+Create a `.env` file in the `frontend` folder:
+
+```
+VITE_API_BASE_URL=https://localhost:7032
 ```
 
-To recreate this project with the same configuration:
+### Production
 
-```sh
-# recreate this project
-npx sv@0.15.2 create --template minimal --types ts --install npm frontend
+Set this in GitHub Secrets:
+
+```
+VITE_API_BASE_URL=https://veridict-53fa.onrender.com
 ```
 
-## Developing
+---
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## 🚀 Development
 
-```sh
+Install dependencies:
+
+```
+npm install
+```
+
+Run locally:
+
+```
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+Build:
 
-To create a production version of your app:
-
-```sh
+```
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
+---
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## 📦 Deployment
+
+This frontend is automatically deployed via GitHub Actions to GitHub Pages.
+
+On each push:
+- the app is built  
+- environment variables are injected  
+- the site is deployed  
+
+---
+
+## 🧭 Project Philosophy
+
+This project is built with a focus on:
+
+- clarity over complexity  
+- real functionality over demos  
+- iterative development  
+- AI as a tool — not a crutch  
+
+---
+
+## 🔮 Status
+
+Veridict is currently in an early stage but already supports:
+
+- URL analysis  
+- AI-based evaluation  
+- persistent storage  
+- caching and reuse logic  
+
+---
+
+## 👤 Author
+
+Built by **Hilden Media**  
+_"Teknik med själ"_
+
+---
+
+## ⚠️ Note
+
+This repository contains only the **frontend**.
+
+The backend (API, database, AI logic) is hosted separately.
