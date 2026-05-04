@@ -334,11 +334,7 @@
                     <br />
                     Site owners can claim their page to track improvements over time.
                 </p>
-                <a
-                    href="https://hildenmedia.se"
-                    target="_blank"
-                    rel="noreferrer">Claim this site</a
-                >
+                <button class="claim-cta" type="button">Claim this site</button>
             </footer>
         </section>
 
@@ -705,11 +701,13 @@
         line-height: 1.55;
     }
 
-    .notice a {
+    .notice .claim-cta {
         padding: 13px 24px;
         border: 1px solid rgba(142, 94, 255, 0.5);
         border-radius: 9px;
+        background: transparent;
         color: #b985ff;
+        font: inherit;
         font-weight: 800;
         text-decoration: none;
     }
@@ -852,7 +850,7 @@
             padding: 24px 18px;
         }
 
-        .notice a,
+        .notice .claim-cta,
         .meta-list strong {
             text-align: left;
         }

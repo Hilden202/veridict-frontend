@@ -34,7 +34,7 @@
 			<li>Priority updates</li>
 			<li>And more...</li>
 		</ul>
-		<a href="https://hildenmedia.se">Upgrade now</a>
+		<span class="upgrade-cta">Upgrade now</span>
 	</section>
 
 	<a
@@ -218,7 +218,7 @@
 		font-weight: 900;
 	}
 
-	.upgrade a {
+	.upgrade-cta {
 		display: grid;
 		min-height: 48px;
 		place-items: center;
