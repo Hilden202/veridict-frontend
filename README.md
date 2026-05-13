@@ -1,3 +1,14 @@
+<!-- Veridict banner -->
+<div align="center">
+  <a href="https://veridict.hildenmedia.se" target="_blank">
+    <img
+      height="220"
+      src="https://raw.githubusercontent.com/Hilden202/HildenMedia/main/images/Veridict-banner.png"
+      alt="Veridict – analyzes and ranks websites"
+    />
+  </a>
+</div>
+
 # Veridict Frontend
 
 🌐 Live site: https://veridict.hildenmedia.se
