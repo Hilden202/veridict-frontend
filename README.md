@@ -3,7 +3,7 @@
   <a href="https://tarot.hildenmedia.se" target="_blank">
     <img
       height="220"
-      src="https://raw.githubusercontent.com/Hilden202/HildenMedia/main/images/veridict-banner.png"
+      src="https://raw.githubusercontent.com/Hilden202/HildenMedia/main/images/Veridict-banner.png"
       alt="Veridict – Analyzes websites"
     />
   </a>
