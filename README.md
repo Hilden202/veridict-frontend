@@ -1,3 +1,14 @@
+<!-- Veridict banner -->
+<div align="left">
+  <a href="https://tarot.hildenmedia.se" target="_blank">
+    <img
+      height="220"
+      src="https://raw.githubusercontent.com/Hilden202/HildenMedia/main/images/veridict-banner.png"
+      alt="Veridict – Analyzes websites"
+    />
+  </a>
+</div>
+
 # Veridict Frontend
 
 🌐 Live site: https://veridict.hildenmedia.se
