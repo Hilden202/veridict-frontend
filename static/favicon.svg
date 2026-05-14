@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+	<title id="title">Veridict</title>
+	<defs>
+		<linearGradient id="surface" x1="8" x2="56" y1="6" y2="58" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#10233b" />
+			<stop offset="1" stop-color="#06111e" />
+		</linearGradient>
+		<linearGradient id="left-stroke" x1="18" x2="39" y1="11" y2="55" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#9b70ff" />
+			<stop offset="1" stop-color="#2e92ff" />
+		</linearGradient>
+		<linearGradient id="right-stroke" x1="34" x2="49" y1="18" y2="55" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#52f1c8" />
+			<stop offset="1" stop-color="#4b8cff" />
+		</linearGradient>
+	</defs>
+	<rect width="64" height="64" rx="16" fill="url(#surface)" />
+	<path d="M17 12h13l10 43H27L17 12Z" fill="url(#left-stroke)" />
+	<path d="M47 18h-12L26 55h13l8-37Z" fill="url(#right-stroke)" />
+</svg>

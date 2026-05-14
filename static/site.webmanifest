@@ -1,0 +1,36 @@
+{
+	"name": "Veridict",
+	"short_name": "Veridict",
+	"description": "AI-powered website quality analysis based on relevance, clarity and practical value.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#06111e",
+	"theme_color": "#081423",
+	"icons": [
+		{
+			"src": "/icons/pwa-192x192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icons/pwa-512x512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icons/maskable-192x192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "maskable"
+		},
+		{
+			"src": "/icons/maskable-512x512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		}
+	]
+}
