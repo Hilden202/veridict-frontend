@@ -1,11 +1,16 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import AnalysisCard from "$lib/components/AnalysisCard.svelte";
+    import PublicAnalysisCard from "$lib/components/PublicAnalysisCard.svelte";
     import ScoreBars from "$lib/components/ScoreBars.svelte";
     import ScoreRing from "$lib/components/ScoreRing.svelte";
     import Sidebar from "$lib/components/Sidebar.svelte";
 
     type AnalysisResult = {
+        alreadyApproved?: boolean;
+        alreadyPending?: boolean;
+        siteTitle?: string;
+        status?: string;
         url?: string;
         intent?: string;
         score?: number;
@@ -24,12 +29,36 @@
         contentExtracted?: number;
     };
 
+    type CatalogItem = {
+        id?: string;
+        title?: string;
+        url?: string;
+        category?: string;
+        score?: number;
+        summary?: string;
+        topics?: string[];
+        screenshotThumbnailPath?: string;
+        createdAt?: string;
+    };
+
     const STORAGE_KEY = "veridict:last-analysis";
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5293";
 
     let url = $state("");
+    let catalogQuery = $state("");
+    let categoryFilter = $state("");
+    let sortMode = $state<"top" | "newest">("top");
     let loading = $state(false);
+    let catalogLoading = $state(false);
     let result = $state<AnalysisResult | null>(null);
+    let latestApproved = $state<CatalogItem[]>([]);
+    let topApproved = $state<CatalogItem[]>([]);
+    let hiddenGems = $state<CatalogItem[]>([]);
+    let catalogResults = $state<CatalogItem[]>([]);
+    let categories = $state<string[]>([]);
     let error = $state("");
+    let catalogError = $state("");
+    let catalogSearched = $state(false);
     let analyzedAt = $state<Date | null>(null);
     let restored = $state(false);
 
@@ -63,8 +92,12 @@
     const statusText = $derived(
         loading
             ? "Analysis in progress"
-            : result
-              ? "Analysis completed"
+            : result?.alreadyApproved
+              ? "Already approved in the catalog"
+              : result?.alreadyPending
+                ? "Already waiting for review"
+                : result
+                  ? "Analysis queued for review"
               : restored
                 ? "Restored previous analysis"
                 : "Ready",
@@ -152,7 +185,6 @@
         error = "";
 
         try {
-            const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5293";
             const res = await fetch(`${API_BASE}/analyze`, {
                 method: "POST",
                 headers: {
@@ -187,6 +219,64 @@
         }
     }
 
+    async function loadCatalog() {
+        catalogLoading = true;
+        catalogError = "";
+
+        try {
+            const [latestRes, topRes, categoriesRes] = await Promise.all([
+                fetch(`${API_BASE}/catalog/latest?limit=6`),
+                fetch(`${API_BASE}/catalog/top?limit=6`),
+                fetch(`${API_BASE}/catalog/categories`),
+            ]);
+
+            if (!latestRes.ok || !topRes.ok || !categoriesRes.ok) {
+                throw new Error("Catalog API returned an error.");
+            }
+
+            latestApproved = (await latestRes.json()) as CatalogItem[];
+            topApproved = (await topRes.json()) as CatalogItem[];
+            categories = (await categoriesRes.json()) as string[];
+            hiddenGems = shuffle([...latestApproved, ...topApproved]).slice(0, 3);
+        } catch {
+            catalogError = "Approved catalog is unavailable right now.";
+        } finally {
+            catalogLoading = false;
+        }
+    }
+
+    async function searchCatalog() {
+        catalogLoading = true;
+        catalogError = "";
+
+        try {
+            const params = new URLSearchParams();
+            if (catalogQuery.trim()) params.set("q", catalogQuery.trim());
+            if (categoryFilter) params.set("category", categoryFilter);
+            params.set("sort", sortMode === "newest" ? "newest" : "top");
+
+            const res = await fetch(`${API_BASE}/catalog/search?${params.toString()}`);
+
+            if (!res.ok) {
+                throw new Error("Catalog search failed.");
+            }
+
+            catalogResults = (await res.json()) as CatalogItem[];
+            catalogSearched = true;
+        } catch {
+            catalogError = "Could not search the approved catalog.";
+        } finally {
+            catalogLoading = false;
+        }
+    }
+
+    function shuffle<T>(items: T[]) {
+        return items
+            .map((item) => ({ item, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .map(({ item }) => item);
+    }
+
     function handleKeydown(event: KeyboardEvent) {
         if (event.key === "Enter" && !loading) {
             event.preventDefault();
@@ -203,6 +293,8 @@
     }
 
     onMount(() => {
+        loadCatalog();
+
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return;
 
@@ -219,10 +311,10 @@
 </script>
 
 <svelte:head>
-    <title>Veridict | Analyze any website</title>
+    <title>Veridict | Discover high quality websites</title>
     <meta
         name="description"
-        content="AI-powered website quality analysis based on relevance, clarity and practical value."
+        content="Curated AI-reviewed website discovery based on relevance, clarity and practical value."
     />
 </svelte:head>
 
@@ -233,44 +325,101 @@
         <section class="content">
             <header class="hero">
                 <div>
-                    <h1>Analyze any website</h1>
+                    <h1>Discover high quality websites</h1>
                     <p>
-                        AI-powered analysis based on quality, relevance and real
-                        value — not SEO.
+                        Browse AI-reviewed analyses curated for usefulness,
+                        clarity and real value — not SEO.
                     </p>
                 </div>
 
-                <form
-                    class="analyze-form"
-                    onsubmit={(event) => event.preventDefault()}
-                >
-                    <label class="url-field">
-                        <span>◎</span>
+                <form class="catalog-search" onsubmit={(event) => { event.preventDefault(); searchCatalog(); }}>
+                    <label class="catalog-field">
+                        <span>⌕</span>
                         <input
-                            bind:value={url}
-                            disabled={loading}
-                            onkeydown={handleKeydown}
-                            placeholder="Enter a website URL..."
-                            type="url"
+                            bind:value={catalogQuery}
+                            placeholder="Search the approved catalog..."
+                            type="search"
                         />
                     </label>
 
-                    <button
-                        class="analyze-button"
-                        disabled={loading || !url.trim()}
-                        onclick={analyze}
-                        type="button"
-                    >
-                        <span>✣</span>
-                        {loading ? "Analyzing..." : "Analyze"}
+                    <select bind:value={categoryFilter} aria-label="Filter by category">
+                        <option value="">All categories</option>
+                        {#each categories as category}
+                            <option value={category}>{category}</option>
+                        {/each}
+                    </select>
+
+                    <select bind:value={sortMode} aria-label="Sort catalog">
+                        <option value="top">Top rated</option>
+                        <option value="newest">Newest</option>
+                    </select>
+
+                    <button disabled={catalogLoading} type="submit">
+                        {catalogLoading ? "Searching..." : "Search"}
                     </button>
                 </form>
 
-                <div class="status-line" class:error-state={Boolean(error)}>
-                    <span>{error ? "!" : loading ? "◌" : "✓"}</span>
-                    <strong>{error || statusText}</strong>
-                    <i>•</i>
-                    <em>{statusTime}</em>
+                {#if catalogResults.length}
+                    <section class="catalog-results">
+                        <div class="catalog-heading">
+                            <span>Approved results</span>
+                            <strong>{catalogResults.length} matches</strong>
+                        </div>
+                        <div class="public-card-grid compact">
+                            {#each catalogResults.slice(0, 6) as item}
+                                <PublicAnalysisCard {item} apiBase={API_BASE} compact />
+                            {/each}
+                        </div>
+                    </section>
+                {:else if catalogError}
+                    <p class="catalog-error">{catalogError}</p>
+                {:else if catalogSearched}
+                    <p class="catalog-empty">No approved catalog matches yet.</p>
+                {/if}
+
+                <div class="analyze-secondary">
+                    <div class="catalog-heading">
+                        <span>Analyze for review</span>
+                        <strong>Secondary workflow</strong>
+                    </div>
+
+                    <form
+                        class="analyze-form"
+                        onsubmit={(event) => event.preventDefault()}
+                    >
+                        <label class="url-field">
+                            <span>◎</span>
+                            <input
+                                bind:value={url}
+                                disabled={loading}
+                                onkeydown={handleKeydown}
+                                placeholder="Submit a website URL for analysis..."
+                                type="url"
+                            />
+                        </label>
+
+                        <button
+                            class="analyze-button"
+                            disabled={loading || !url.trim()}
+                            onclick={analyze}
+                            type="button"
+                        >
+                            <span>✣</span>
+                            {loading ? "Analyzing..." : "Analyze"}
+                        </button>
+                    </form>
+
+                    <p class="review-copy">
+                        Submitted analyses enter review before they can become
+                        part of the public catalog.
+                    </p>
+
+                    <div class="status-line" class:error-state={Boolean(error)}>
+                        <span>{error ? "!" : loading ? "◌" : "✓"}</span>
+                        <strong>{error || statusText}</strong>
+                        <i>•</i>
+                        <em>{statusTime}</em>
+                    </div>
                 </div>
             </header>
 
@@ -325,6 +474,57 @@
                     </div>
                 </section>
             {/if}
+
+            <section class="catalog-showcase">
+                <div class="section-title">
+                    <span>Curated catalog</span>
+                    <h2>Recently approved</h2>
+                </div>
+
+                <div class="public-card-grid">
+                    {#if latestApproved.length}
+                        {#each latestApproved.slice(0, 3) as item}
+                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                        {/each}
+                    {:else}
+                        <div class="catalog-empty span-grid">No approved analyses yet.</div>
+                    {/if}
+                </div>
+            </section>
+
+            <section class="catalog-showcase">
+                <div class="section-title">
+                    <span>Quality signals</span>
+                    <h2>Top rated</h2>
+                </div>
+
+                <div class="public-card-grid">
+                    {#if topApproved.length}
+                        {#each topApproved.slice(0, 3) as item}
+                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                        {/each}
+                    {:else}
+                        <div class="catalog-empty span-grid">Top rated entries will appear after approval.</div>
+                    {/if}
+                </div>
+            </section>
+
+            <section class="catalog-showcase">
+                <div class="section-title">
+                    <span>Fresh paths</span>
+                    <h2>Hidden gems</h2>
+                </div>
+
+                <div class="public-card-grid">
+                    {#if hiddenGems.length}
+                        {#each hiddenGems as item}
+                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                        {/each}
+                    {:else}
+                        <div class="catalog-empty span-grid">Hidden gems are waiting for the first curated approvals.</div>
+                    {/if}
+                </div>
+            </section>
 
             <footer class="notice">
                 <span>✣</span>
@@ -420,7 +620,8 @@
     }
 
     :global(button),
-    :global(input) {
+    :global(input),
+    :global(select) {
         font: inherit;
     }
 
@@ -463,14 +664,21 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) 160px;
         gap: 14px;
-        margin-top: 38px;
     }
 
+    .catalog-search {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(150px, 190px) 140px 140px;
+        gap: 12px;
+        margin-top: 36px;
+    }
+
+    .catalog-field,
     .url-field {
         display: flex;
         align-items: center;
-        min-height: 64px;
         gap: 18px;
+        min-height: 64px;
         padding: 0 22px;
         border: 1px solid rgba(137, 158, 191, 0.32);
         border-radius: 12px;
@@ -483,6 +691,7 @@
             box-shadow 180ms ease;
     }
 
+    .catalog-field:focus-within,
     .url-field:focus-within {
         border-color: rgba(133, 114, 255, 0.84);
         box-shadow:
@@ -490,9 +699,126 @@
             0 18px 35px rgba(0, 0, 0, 0.16);
     }
 
+    .catalog-field span,
     .url-field span {
         color: #aab8cc;
         font-size: 1.45rem;
+    }
+
+    .catalog-search select,
+    .catalog-search button {
+        min-height: 64px;
+        border-radius: 12px;
+    }
+
+    .catalog-search select {
+        border: 1px solid rgba(137, 158, 191, 0.28);
+        background: rgba(9, 21, 35, 0.86);
+        color: #eef4ff;
+        padding: 0 14px;
+        outline: 0;
+    }
+
+    .catalog-search button {
+        border: 0;
+        background: linear-gradient(125deg, #2d6cff, #38d3a1);
+        color: #ffffff;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: 0 18px 44px rgba(45, 108, 255, 0.26);
+    }
+
+    .catalog-search button:disabled {
+        cursor: wait;
+        opacity: 0.7;
+    }
+
+    .catalog-results,
+    .analyze-secondary,
+    .catalog-showcase {
+        border: 1px solid rgba(130, 153, 188, 0.14);
+        border-radius: 14px;
+        background: linear-gradient(
+            145deg,
+            rgba(12, 27, 45, 0.86),
+            rgba(7, 17, 29, 0.92)
+        );
+    }
+
+    .catalog-results {
+        display: grid;
+        gap: 16px;
+        margin-top: 16px;
+        padding: 18px;
+    }
+
+    .catalog-heading,
+    .section-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 14px;
+    }
+
+    .catalog-heading span,
+    .section-title span {
+        color: #8fa0ba;
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+
+    .catalog-heading strong {
+        color: #dce7f8;
+        font-size: 0.86rem;
+    }
+
+    .catalog-empty,
+    .catalog-error,
+    .review-copy {
+        margin: 10px 0 0;
+        color: #9eadc4;
+        font-size: 0.92rem;
+        line-height: 1.5;
+    }
+
+    .catalog-empty {
+        display: grid;
+        min-height: 118px;
+        place-items: center;
+        border: 1px dashed rgba(130, 153, 188, 0.22);
+        border-radius: 10px;
+        background: rgba(8, 18, 31, 0.52);
+        text-align: center;
+    }
+
+    .catalog-empty.span-grid {
+        grid-column: 1 / -1;
+    }
+
+    .catalog-error {
+        color: #ffb7c0;
+    }
+
+    .analyze-secondary {
+        display: grid;
+        gap: 14px;
+        margin-top: 24px;
+        padding: 18px;
+    }
+
+    .public-card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(16px, 1.8vw, 22px);
+    }
+
+    .public-card-grid.compact {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .url-field {
+        min-height: 64px;
     }
 
     input {
@@ -650,6 +976,27 @@
         gap: clamp(16px, 1.8vw, 22px);
         margin-top: 6px;
         align-items: stretch;
+    }
+
+    .catalog-showcase {
+        display: grid;
+        gap: 18px;
+        padding: 22px;
+    }
+
+    .section-title {
+        align-items: end;
+        justify-content: flex-start;
+        flex-direction: column;
+        justify-items: start;
+        align-items: flex-start;
+    }
+
+    .section-title h2 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 1.25rem;
+        letter-spacing: 0;
     }
 
     .empty-state {

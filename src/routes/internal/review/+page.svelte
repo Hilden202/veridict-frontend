@@ -7,6 +7,7 @@
 		id: string;
 		siteTitle?: string;
 		url?: string;
+		canonicalUrl?: string;
 		screenshotPath?: string;
 		screenshotThumbnailPath?: string;
 		category?: string;
@@ -14,6 +15,15 @@
 		status?: ReviewStatus | string;
 		summary?: string;
 		createdAt?: string;
+		pendingDuplicateCount?: number;
+		hasPendingDuplicates?: boolean;
+		alreadyApprovedInProduction?: boolean;
+	};
+
+	type ScreenshotRefreshResponse = {
+		success: boolean;
+		message?: string;
+		analysis?: ReviewAnalysis;
 	};
 
 	type Tab = "pending" | "approved" | "rejected";
@@ -102,7 +112,7 @@
 			);
 
 			if (!response.ok) {
-				throw new Error(`Review action returned ${response.status}`);
+				throw new Error(await readErrorMessage(response));
 			}
 
 			const updated = (await response.json()) as ReviewAnalysis;
@@ -110,8 +120,8 @@
 				...analyses.filter((analysis) => analysis.id !== updated.id),
 				updated,
 			]);
-		} catch {
-			error = `Could not ${action} this analysis.`;
+		} catch (err) {
+			error = `Could not ${action} this analysis. ${errorFromUnknown(err)}`;
 		} finally {
 			actionId = null;
 		}
@@ -133,11 +143,16 @@
 				throw new Error(`Screenshot refresh returned ${response.status}`);
 			}
 
-			const updated = (await response.json()) as ReviewAnalysis;
-			imageFailures = imageFailures.filter((failedId) => failedId !== updated.id);
+			const payload = (await response.json()) as ScreenshotRefreshResponse;
+
+			if (!payload.success || !payload.analysis) {
+				throw new Error(payload.message || "Screenshot refresh failed.");
+			}
+
+			imageFailures = imageFailures.filter((failedId) => failedId !== payload.analysis!.id);
 			analyses = mergeAnalyses([
-				...analyses.filter((analysis) => analysis.id !== updated.id),
-				updated,
+				...analyses.filter((analysis) => analysis.id !== payload.analysis!.id),
+				payload.analysis,
 			]);
 		} catch {
 			error = "Could not refresh this screenshot. See API logs for render details.";
@@ -259,6 +274,19 @@
 			imageFailures = [...imageFailures, id];
 		}
 	}
+
+	async function readErrorMessage(response: Response) {
+		try {
+			const payload = await response.json();
+			return payload.detail || payload.title || `Review action returned ${response.status}`;
+		} catch {
+			return `Review action returned ${response.status}`;
+		}
+	}
+
+	function errorFromUnknown(value: unknown) {
+		return value instanceof Error && value.message ? value.message : "";
+	}
 </script>
 
 <svelte:head>
@@ -361,20 +389,20 @@
 			<div class="analysis-list">
 				{#each filteredAnalyses as analysis}
 					<article class="analysis-row">
-						<div class="thumbnail">
-							{#if screenshotSource(analysis)}
-								<img
+							<div class="thumbnail">
+								{#if screenshotSource(analysis)}
+									<img
 									src={screenshotSource(analysis)}
 									alt={`Screenshot for ${analysis.siteTitle || analysis.url || "analysis"}`}
 									onerror={() => markImageFailed(analysis.id)}
 								/>
-							{:else}
-								<div class="thumbnail-placeholder">
-									<span>WEBP</span>
-									<strong>No screenshot</strong>
-								</div>
-							{/if}
-						</div>
+								{:else}
+									<div class="thumbnail-placeholder">
+										<span>WEBP</span>
+										<strong>{imageFailures.includes(analysis.id) ? "Preview unavailable" : "No screenshot"}</strong>
+									</div>
+								{/if}
+							</div>
 
 						<div class="analysis-main">
 							<div class="analysis-topline">
@@ -400,6 +428,17 @@
 								<i></i>
 								<span>{formatDate(analysis.createdAt)}</span>
 							</div>
+
+							{#if analysis.hasPendingDuplicates || analysis.alreadyApprovedInProduction}
+								<div class="queue-flags">
+									{#if analysis.hasPendingDuplicates}
+										<span>{analysis.pendingDuplicateCount} pending duplicates</span>
+									{/if}
+									{#if analysis.alreadyApprovedInProduction}
+										<span>Approved in production</span>
+									{/if}
+								</div>
+							{/if}
 
 							<p class="summary">{analysis.summary || "No summary returned."}</p>
 						</div>
@@ -439,7 +478,7 @@
 		{:else}
 			<div class="empty-state">
 				<strong>No {tabs.find((tab) => tab.id === activeTab)?.label.toLowerCase()} analyses</strong>
-				<p>The queue is clear for this view.</p>
+				<p>{activeTab === "pending" ? "No generated analyses are waiting for review." : "Nothing matches this catalog state yet."}</p>
 			</div>
 		{/if}
 	</section>
@@ -915,6 +954,23 @@
 		height: 4px;
 		border-radius: 50%;
 		background: #465772;
+	}
+
+	.queue-flags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.queue-flags span {
+		min-height: 24px;
+		border: 1px solid rgba(255, 190, 64, 0.28);
+		border-radius: 999px;
+		background: rgba(255, 184, 56, 0.1);
+		color: #ffd16b;
+		padding: 3px 9px;
+		font-size: 0.74rem;
+		font-weight: 850;
 	}
 
 	.summary {
