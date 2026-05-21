@@ -1,7 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import AnalysisCard from "$lib/components/AnalysisCard.svelte";
-    import { getApiEnvironmentConfig } from "$lib/apiEnvironment";
+    import {
+        getApiEnvironmentConfig,
+        getPublicFrontendEnvironmentMode,
+        type ApiEnvironmentMode,
+    } from "$lib/apiEnvironment";
     import PublicAnalysisCard from "$lib/components/PublicAnalysisCard.svelte";
     import ScoreBars from "$lib/components/ScoreBars.svelte";
     import ScoreRing from "$lib/components/ScoreRing.svelte";
@@ -38,15 +42,17 @@
         score?: number;
         summary?: string;
         topics?: string[];
+        screenshotPath?: string;
         screenshotThumbnailPath?: string;
+        screenshotUrl?: string;
+        thumbnailUrl?: string;
+        imageUrl?: string;
         createdAt?: string;
     };
 
-    const STORAGE_KEY = "veridict:last-analysis";
-    const PUBLIC_ENVIRONMENT = getApiEnvironmentConfig("production");
-    const API_BASE = PUBLIC_ENVIRONMENT.apiBaseUrl;
-    const PUBLIC_CATALOG_BASE = PUBLIC_ENVIRONMENT.publicCatalogUrl;
+    const ANALYSIS_STORAGE_KEY_PREFIX = "veridict:last-analysis";
 
+    let publicApiMode = $state<ApiEnvironmentMode>("production");
     let url = $state("");
     let catalogQuery = $state("");
     let categoryFilter = $state("");
@@ -65,6 +71,10 @@
     let analyzedAt = $state<Date | null>(null);
     let restored = $state(false);
 
+    const publicEnvironment = $derived(getApiEnvironmentConfig(publicApiMode));
+    const API_BASE = $derived(publicEnvironment.apiBaseUrl);
+    const PUBLIC_CATALOG_BASE = $derived(publicEnvironment.publicCatalogUrl);
+    const analysisStorageKey = $derived(`${ANALYSIS_STORAGE_KEY_PREFIX}:${publicApiMode}`);
     const visibleResult = $derived(
         result ?? (loading ? createLoadingResult(url) : null),
     );
@@ -207,7 +217,7 @@
             restored = false;
 
             localStorage.setItem(
-                STORAGE_KEY,
+                analysisStorageKey,
                 JSON.stringify({
                     url,
                     result,
@@ -296,9 +306,10 @@
     }
 
     onMount(() => {
+        publicApiMode = getPublicFrontendEnvironmentMode();
         loadCatalog();
 
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(analysisStorageKey);
         if (!stored) return;
 
         try {
@@ -308,7 +319,7 @@
             analyzedAt = parsed.analyzedAt ? new Date(parsed.analyzedAt) : null;
             restored = Boolean(result);
         } catch {
-            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(analysisStorageKey);
         }
     });
 </script>

@@ -7,7 +7,11 @@
 		score?: number;
 		summary?: string;
 		topics?: string[];
+		screenshotPath?: string;
 		screenshotThumbnailPath?: string;
+		screenshotUrl?: string;
+		thumbnailUrl?: string;
+		imageUrl?: string;
 	};
 
 	type Props = {
@@ -32,6 +36,17 @@
 		return `${apiBase}/${path}`;
 	}
 
+	function imageReference(item: CatalogItem) {
+		return (
+			item.imageUrl ||
+			item.thumbnailUrl ||
+			item.screenshotUrl ||
+			item.screenshotThumbnailPath ||
+			item.screenshotPath ||
+			""
+		);
+	}
+
 	function displayHost(url?: string) {
 		if (!url) return "";
 
@@ -45,8 +60,8 @@
 
 <a class="catalog-card" class:compact href={item.url} target="_blank" rel="noreferrer">
 	<div class="shot">
-		{#if imageSource(item.screenshotThumbnailPath)}
-			<img src={imageSource(item.screenshotThumbnailPath)} alt={item.title || item.url || "Approved website"} />
+		{#if imageSource(imageReference(item))}
+			<img src={imageSource(imageReference(item))} alt={item.title || item.url || "Approved website"} />
 		{:else}
 			<div class="shot-placeholder">
 				<span>VERIDICT</span>

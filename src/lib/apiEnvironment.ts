@@ -21,13 +21,21 @@ export function getStoredApiEnvironmentMode(): ApiEnvironmentMode {
 		return "production";
 	}
 
-	return normalizeMode(localStorage.getItem(STORAGE_KEY)) ?? "production";
+	return normalizeMode(localStorage.getItem(STORAGE_KEY)) ?? getPublicFrontendEnvironmentMode();
 }
 
 export function setStoredApiEnvironmentMode(mode: ApiEnvironmentMode) {
 	if (hasBrowserStorage()) {
 		localStorage.setItem(STORAGE_KEY, mode);
 	}
+}
+
+export function getPublicFrontendEnvironmentMode(): ApiEnvironmentMode {
+	if (typeof window === "undefined") {
+		return "production";
+	}
+
+	return isLocalFrontendHost(window.location.hostname) ? "local" : "production";
 }
 
 export function getApiEnvironmentConfig(mode: ApiEnvironmentMode): ApiEnvironmentConfig {
@@ -129,4 +137,8 @@ function stripTrailingSlash(value: string) {
 
 function hasBrowserStorage() {
 	return typeof localStorage !== "undefined";
+}
+
+function isLocalFrontendHost(hostname: string) {
+	return ["localhost", "127.0.0.1", "::1"].includes(hostname);
 }
