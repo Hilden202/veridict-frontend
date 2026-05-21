@@ -57,7 +57,6 @@
 	const approvedCount = $derived(countByStatus("Approved"));
 	const rejectedCount = $derived(countByStatus("Rejected") + countByStatus("Superseded"));
 	const activeEnvironment = $derived(getApiEnvironmentConfig(apiMode));
-	const reviewToken = getReviewApiToken();
 	const filteredAnalyses = $derived(
 		analyses
 			.filter((analysis) => tabMatches(analysis, activeTab))
@@ -99,7 +98,9 @@
 
 			analyses = mergeAnalyses([...pending, ...approved, ...rejected]);
 		} catch (err) {
-			error = "Could not load the review queue. Check the production review API URL and local review token.";
+			error =
+				errorFromUnknown(err) ||
+				"Could not load the review queue. Check the production review API URL and local review token.";
 		} finally {
 			loading = false;
 		}
@@ -120,7 +121,7 @@
 		const response = await reviewFetch(`/internal/review/analyses/${status}`);
 
 		if (!response.ok) {
-			throw new Error(`Review API returned ${response.status}`);
+			throw new Error(await readErrorMessage(response));
 		}
 
 		return (await response.json()) as ReviewAnalysis[];
@@ -320,10 +321,13 @@
 
 	async function reviewFetch(path: string, init: RequestInit = {}) {
 		const headers = new Headers(init.headers);
+		const reviewToken = getReviewApiToken().trim();
 
 		if (reviewToken) {
 			headers.set("X-Veridict-Review-Token", reviewToken);
 		}
+
+		headers.set("Accept", "application/json");
 
 		return fetch(`${activeEnvironment.apiBaseUrl}${path}`, {
 			...init,
@@ -334,9 +338,15 @@
 	async function readErrorMessage(response: Response) {
 		try {
 			const payload = await response.json();
-			return payload.detail || payload.title || `Review action returned ${response.status}`;
+			return (
+				payload.error ||
+				payload.message ||
+				payload.detail ||
+				payload.title ||
+				`Review API returned ${response.status}`
+			);
 		} catch {
-			return `Review action returned ${response.status}`;
+			return `Review API returned ${response.status}`;
 		}
 	}
 
