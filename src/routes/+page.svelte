@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import AnalysisCard from "$lib/components/AnalysisCard.svelte";
+    import { getApiEnvironmentConfig } from "$lib/apiEnvironment";
     import PublicAnalysisCard from "$lib/components/PublicAnalysisCard.svelte";
     import ScoreBars from "$lib/components/ScoreBars.svelte";
     import ScoreRing from "$lib/components/ScoreRing.svelte";
@@ -42,7 +43,9 @@
     };
 
     const STORAGE_KEY = "veridict:last-analysis";
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5293";
+    const PUBLIC_ENVIRONMENT = getApiEnvironmentConfig("production");
+    const API_BASE = PUBLIC_ENVIRONMENT.apiBaseUrl;
+    const PUBLIC_CATALOG_BASE = PUBLIC_ENVIRONMENT.publicCatalogUrl;
 
     let url = $state("");
     let catalogQuery = $state("");
@@ -367,7 +370,7 @@
                         </div>
                         <div class="public-card-grid compact">
                             {#each catalogResults.slice(0, 6) as item}
-                                <PublicAnalysisCard {item} apiBase={API_BASE} compact />
+                                <PublicAnalysisCard {item} apiBase={API_BASE} publicAssetBase={PUBLIC_CATALOG_BASE} compact />
                             {/each}
                         </div>
                     </section>
@@ -484,7 +487,7 @@
                 <div class="public-card-grid">
                     {#if latestApproved.length}
                         {#each latestApproved.slice(0, 3) as item}
-                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                            <PublicAnalysisCard {item} apiBase={API_BASE} publicAssetBase={PUBLIC_CATALOG_BASE} />
                         {/each}
                     {:else}
                         <div class="catalog-empty span-grid">No approved analyses yet.</div>
@@ -501,7 +504,7 @@
                 <div class="public-card-grid">
                     {#if topApproved.length}
                         {#each topApproved.slice(0, 3) as item}
-                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                            <PublicAnalysisCard {item} apiBase={API_BASE} publicAssetBase={PUBLIC_CATALOG_BASE} />
                         {/each}
                     {:else}
                         <div class="catalog-empty span-grid">Top rated entries will appear after approval.</div>
@@ -518,7 +521,7 @@
                 <div class="public-card-grid">
                     {#if hiddenGems.length}
                         {#each hiddenGems as item}
-                            <PublicAnalysisCard {item} apiBase={API_BASE} />
+                            <PublicAnalysisCard {item} apiBase={API_BASE} publicAssetBase={PUBLIC_CATALOG_BASE} />
                         {/each}
                     {:else}
                         <div class="catalog-empty span-grid">Hidden gems are waiting for the first curated approvals.</div>
@@ -1157,8 +1160,14 @@
     @media (max-width: 1100px) {
         .score-panel,
         .cards-grid,
-        .right-rail {
+        .right-rail,
+        .public-card-grid,
+        .public-card-grid.compact {
             grid-template-columns: 1fr;
+        }
+
+        .catalog-search {
+            grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
         }
 
         .score-panel {
@@ -1184,17 +1193,63 @@
 
     @media (max-width: 680px) {
         .analyze-form,
+        .catalog-search,
         .notice,
         .meta-list div {
             grid-template-columns: 1fr;
+        }
+
+        .workspace {
+            padding: 22px 14px;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+        }
+
+        .hero p {
+            font-size: 1rem;
+            line-height: 1.55;
+        }
+
+        .catalog-search {
+            margin-top: 24px;
+        }
+
+        .catalog-field,
+        .url-field,
+        .catalog-search select,
+        .catalog-search button,
+        .analyze-button {
+            min-height: 54px;
+        }
+
+        input {
+            font-size: 1rem;
         }
 
         .analyze-button {
             width: 100%;
         }
 
+        .catalog-results,
+        .analyze-secondary,
+        .catalog-showcase {
+            padding: 14px;
+        }
+
         .score-panel {
+            min-height: auto;
             padding: 24px 18px;
+        }
+
+        .empty-state {
+            min-height: 320px;
+            padding: 32px 18px;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
         }
 
         .notice .claim-cta,

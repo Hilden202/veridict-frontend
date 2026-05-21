@@ -13,10 +13,11 @@
 	type Props = {
 		item: CatalogItem;
 		apiBase?: string;
+		publicAssetBase?: string;
 		compact?: boolean;
 	};
 
-	let { item, apiBase = "", compact = false }: Props = $props();
+	let { item, apiBase = "", publicAssetBase = "", compact = false }: Props = $props();
 
 	function formatScore(score?: number) {
 		return typeof score === "number" ? score.toFixed(1) : "--";
@@ -25,9 +26,9 @@
 	function imageSource(path?: string) {
 		if (!path) return "";
 		if (/^(https?:|data:|blob:)/i.test(path)) return path;
-		if (path.startsWith("/screenshots/")) return path;
+		if (path.startsWith("/screenshots/")) return `${publicAssetBase}${path}`;
 		if (path.startsWith("/storage/")) return `${apiBase}${path}`;
-		if (path.startsWith("screenshots/")) return `/${path}`;
+		if (path.startsWith("screenshots/")) return `${publicAssetBase}/${path}`;
 		return `${apiBase}/${path}`;
 	}
 
@@ -195,8 +196,7 @@
 		color: #ffffff;
 		font-size: 1.02rem;
 		line-height: 1.25;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		word-break: break-word;
 	}
 
 	p {
@@ -213,5 +213,35 @@
 
 	.compact .copy {
 		padding: 14px;
+	}
+
+	@media (max-width: 520px) {
+		.catalog-card {
+			border-radius: 10px;
+		}
+
+		.score-ring {
+			right: 10px;
+			bottom: 10px;
+			width: 46px;
+			height: 46px;
+		}
+
+		.score-ring strong {
+			font-size: 0.9rem;
+		}
+
+		.copy {
+			padding: 14px;
+		}
+
+		.meta {
+			display: grid;
+			justify-content: stretch;
+		}
+
+		.meta small {
+			white-space: normal;
+		}
 	}
 </style>

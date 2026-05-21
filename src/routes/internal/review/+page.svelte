@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import {
+		getApiEnvironmentConfig,
+		getReviewApiToken,
+		getStoredApiEnvironmentMode,
+		isInternalReviewEnabledForCurrentBrowser,
+		resolveScreenshotUrl,
+		setStoredApiEnvironmentMode,
+		type ApiEnvironmentMode,
+	} from "$lib/apiEnvironment";
 
-	type ReviewStatus = "PendingReview" | "Approved" | "Rejected";
+	type ReviewStatus = "PendingReview" | "Approved" | "Rejected" | "Superseded";
 
 	type ReviewAnalysis = {
 		id: string;
@@ -18,6 +27,9 @@
 		pendingDuplicateCount?: number;
 		hasPendingDuplicates?: boolean;
 		alreadyApprovedInProduction?: boolean;
+		replacementTargetId?: string;
+		replacementTargetTitle?: string;
+		replacementTargetCreatedAt?: string;
 	};
 
 	type ScreenshotRefreshResponse = {
@@ -28,19 +40,21 @@
 
 	type Tab = "pending" | "approved" | "rejected";
 
-	const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5293";
-
 	let analyses = $state<ReviewAnalysis[]>([]);
+	let apiMode = $state<ApiEnvironmentMode>("production");
 	let activeTab = $state<Tab>("pending");
 	let query = $state("");
 	let loading = $state(true);
+	let reviewAllowed = $state(false);
 	let actionId = $state<string | null>(null);
 	let error = $state("");
 	let imageFailures = $state<string[]>([]);
 
 	const pendingCount = $derived(countByStatus("PendingReview"));
 	const approvedCount = $derived(countByStatus("Approved"));
-	const rejectedCount = $derived(countByStatus("Rejected"));
+	const rejectedCount = $derived(countByStatus("Rejected") + countByStatus("Superseded"));
+	const activeEnvironment = $derived(getApiEnvironmentConfig(apiMode));
+	const reviewToken = getReviewApiToken();
 	const filteredAnalyses = $derived(
 		analyses
 			.filter((analysis) => tabMatches(analysis, activeTab))
@@ -59,7 +73,14 @@
 	];
 
 	onMount(() => {
-		loadAnalyses();
+		apiMode = getStoredApiEnvironmentMode();
+		reviewAllowed = isInternalReviewEnabledForCurrentBrowser();
+
+		if (reviewAllowed) {
+			loadAnalyses();
+		} else {
+			loading = false;
+		}
 	});
 
 	async function loadAnalyses() {
@@ -75,14 +96,24 @@
 
 			analyses = mergeAnalyses([...pending, ...approved, ...rejected]);
 		} catch (err) {
-			error = "Could not load the review queue. Make sure the API is running locally.";
+			error = "Could not load the review queue. Check the production review API URL and local review token.";
 		} finally {
 			loading = false;
 		}
 	}
 
+	async function selectApiMode(mode: ApiEnvironmentMode) {
+		if (mode === apiMode || actionId) return;
+
+		apiMode = mode;
+		setStoredApiEnvironmentMode(mode);
+		analyses = [];
+		imageFailures = [];
+		await loadAnalyses();
+	}
+
 	async function fetchAnalyses(status: Tab) {
-		const response = await fetch(`${API_BASE}/internal/review/analyses/${status}`);
+		const response = await reviewFetch(`/internal/review/analyses/${status}`);
 
 		if (!response.ok) {
 			throw new Error(`Review API returned ${response.status}`);
@@ -106,20 +137,24 @@
 		error = "";
 
 		try {
-			const response = await fetch(
-				`${API_BASE}/internal/review/analyses/${id}/${action}`,
-				{ method: "POST" },
-			);
+			const response = await reviewFetch(`/internal/review/analyses/${id}/${action}`, {
+				method: "POST",
+			});
 
 			if (!response.ok) {
 				throw new Error(await readErrorMessage(response));
 			}
 
 			const updated = (await response.json()) as ReviewAnalysis;
-			analyses = mergeAnalyses([
-				...analyses.filter((analysis) => analysis.id !== updated.id),
-				updated,
-			]);
+
+			if (action === "approve") {
+				await loadAnalyses();
+			} else {
+				analyses = mergeAnalyses([
+					...analyses.filter((analysis) => analysis.id !== updated.id),
+					updated,
+				]);
+			}
 		} catch (err) {
 			error = `Could not ${action} this analysis. ${errorFromUnknown(err)}`;
 		} finally {
@@ -134,10 +169,9 @@
 		error = "";
 
 		try {
-			const response = await fetch(
-				`${API_BASE}/internal/review/analyses/${id}/refresh-screenshot`,
-				{ method: "POST" },
-			);
+			const response = await reviewFetch(`/internal/review/analyses/${id}/refresh-screenshot`, {
+				method: "POST",
+			});
 
 			if (!response.ok) {
 				throw new Error(`Screenshot refresh returned ${response.status}`);
@@ -181,7 +215,7 @@
 
 		if (tab === "pending") return status === "PendingReview";
 		if (tab === "approved") return status === "Approved";
-		return status === "Rejected";
+		return status === "Rejected" || status === "Superseded";
 	}
 
 	function matchesQuery(analysis: ReviewAnalysis) {
@@ -203,6 +237,7 @@
 	function normalizeStatus(status?: string): ReviewStatus {
 		if (status === "Approved") return "Approved";
 		if (status === "Rejected") return "Rejected";
+		if (status === "Superseded") return "Superseded";
 		return "PendingReview";
 	}
 
@@ -246,33 +281,26 @@
 
 		if (!reference.trim()) return "";
 
-		if (/^(https?:|data:|blob:)/i.test(reference)) {
-			return reference;
-		}
-
-		if (reference.startsWith("/storage/")) {
-			return `${API_BASE}${reference}`;
-		}
-
-		if (reference.startsWith("storage/")) {
-			return `${API_BASE}/${reference}`;
-		}
-
-		if (reference.startsWith("/")) {
-			return reference;
-		}
-
-		if (reference.startsWith("screenshots/")) {
-			return `/${reference}`;
-		}
-
-		return `${API_BASE}/${reference}`;
+		return resolveScreenshotUrl(reference, activeEnvironment);
 	}
 
 	function markImageFailed(id: string) {
 		if (!imageFailures.includes(id)) {
 			imageFailures = [...imageFailures, id];
 		}
+	}
+
+	async function reviewFetch(path: string, init: RequestInit = {}) {
+		const headers = new Headers(init.headers);
+
+		if (reviewToken) {
+			headers.set("X-Veridict-Review-Token", reviewToken);
+		}
+
+		return fetch(`${activeEnvironment.apiBaseUrl}${path}`, {
+			...init,
+			headers,
+		});
 	}
 
 	async function readErrorMessage(response: Response) {
@@ -287,6 +315,7 @@
 	function errorFromUnknown(value: unknown) {
 		return value instanceof Error && value.message ? value.message : "";
 	}
+
 </script>
 
 <svelte:head>
@@ -298,6 +327,19 @@
 </svelte:head>
 
 <main class="review-shell">
+	{#if !reviewAllowed}
+		<section class="access-panel">
+			<span class="mark"><i></i><b></b></span>
+			<div>
+				<p>Local tool only</p>
+				<h1>Review dashboard unavailable</h1>
+				<span>
+					This moderation surface only runs from local development or an explicitly
+					enabled internal environment.
+				</span>
+			</div>
+		</section>
+	{:else}
 	<header class="topbar">
 		<div class="brand-block">
 			<a href="/" aria-label="Back to Veridict home">
@@ -306,34 +348,62 @@
 			<div>
 				<p>Internal moderation</p>
 				<h1>Veridict Review Queue</h1>
+				<span class="api-source">{activeEnvironment.label}: {activeEnvironment.apiBaseUrl}</span>
 			</div>
 		</div>
 
-		<div class="counters" aria-label="Review status counters">
-			<button
-				class:active={activeTab === "pending"}
-				onclick={() => (activeTab = "pending")}
-				type="button"
-			>
-				<span>Pending</span>
-				<strong>{pendingCount}</strong>
-			</button>
-			<button
-				class:active={activeTab === "approved"}
-				onclick={() => (activeTab = "approved")}
-				type="button"
-			>
-				<span>Approved</span>
-				<strong>{approvedCount}</strong>
-			</button>
-			<button
-				class:active={activeTab === "rejected"}
-				onclick={() => (activeTab = "rejected")}
-				type="button"
-			>
-				<span>Rejected</span>
-				<strong>{rejectedCount}</strong>
-			</button>
+		<div class="topbar-tools">
+			<div class="environment-control" data-mode={apiMode}>
+				<span class="environment-badge">{activeEnvironment.label}</span>
+				<div class="environment-switch" aria-label="Moderation API environment">
+					<button
+						class:active={apiMode === "local"}
+						disabled={loading || Boolean(actionId)}
+						onclick={() => selectApiMode("local")}
+						type="button"
+					>
+						Local
+					</button>
+					<button
+						class:active={apiMode === "production"}
+						disabled={loading || Boolean(actionId)}
+						onclick={() => selectApiMode("production")}
+						type="button"
+					>
+						Production
+					</button>
+				</div>
+				<a href={activeEnvironment.publicCatalogUrl} target="_blank" rel="noreferrer">
+					Open public catalog
+				</a>
+			</div>
+
+			<div class="counters" aria-label="Review status counters">
+				<button
+					class:active={activeTab === "pending"}
+					onclick={() => (activeTab = "pending")}
+					type="button"
+				>
+					<span>Pending</span>
+					<strong>{pendingCount}</strong>
+				</button>
+				<button
+					class:active={activeTab === "approved"}
+					onclick={() => (activeTab = "approved")}
+					type="button"
+				>
+					<span>Approved</span>
+					<strong>{approvedCount}</strong>
+				</button>
+				<button
+					class:active={activeTab === "rejected"}
+					onclick={() => (activeTab = "rejected")}
+					type="button"
+				>
+					<span>Rejected</span>
+					<strong>{rejectedCount}</strong>
+				</button>
+			</div>
 		</div>
 	</header>
 
@@ -429,13 +499,16 @@
 								<span>{formatDate(analysis.createdAt)}</span>
 							</div>
 
-							{#if analysis.hasPendingDuplicates || analysis.alreadyApprovedInProduction}
+							{#if analysis.hasPendingDuplicates || analysis.alreadyApprovedInProduction || analysis.replacementTargetId}
 								<div class="queue-flags">
 									{#if analysis.hasPendingDuplicates}
 										<span>{analysis.pendingDuplicateCount} pending duplicates</span>
 									{/if}
 									{#if analysis.alreadyApprovedInProduction}
 										<span>Approved in production</span>
+									{/if}
+									{#if analysis.replacementTargetId}
+										<span>Replaces {analysis.replacementTargetTitle || "approved entry"}</span>
 									{/if}
 								</div>
 							{/if}
@@ -482,6 +555,7 @@
 			</div>
 		{/if}
 	</section>
+	{/if}
 </main>
 
 <style>
@@ -522,6 +596,35 @@
 		gap: 18px;
 		min-height: 100vh;
 		padding: 92px clamp(16px, 3vw, 34px) 34px;
+	}
+
+	.access-panel {
+		display: grid;
+		grid-template-columns: 48px minmax(0, 520px);
+		gap: 18px;
+		align-items: start;
+		justify-content: center;
+		margin: auto;
+		padding: 26px;
+		border: 1px solid rgba(124, 146, 180, 0.16);
+		border-radius: 8px;
+		background: #08111d;
+		box-shadow: 0 20px 55px rgba(0, 0, 0, 0.24);
+	}
+
+	.access-panel p {
+		margin: 0 0 4px;
+		color: #8291aa;
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+
+	.access-panel span:not(.mark) {
+		display: block;
+		margin-top: 10px;
+		color: #a7b6cc;
+		line-height: 1.55;
 	}
 
 	.topbar {
@@ -595,12 +698,112 @@
 		text-transform: uppercase;
 	}
 
+	.api-source {
+		display: block;
+		overflow: hidden;
+		max-width: min(54vw, 620px);
+		color: #607088;
+		font-size: 0.72rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	h1 {
 		margin: 0;
 		color: #ffffff;
 		font-size: clamp(1.1rem, 2vw, 1.45rem);
 		line-height: 1.1;
 		letter-spacing: 0;
+	}
+
+	.topbar-tools {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+
+	.environment-control {
+		display: grid;
+		grid-template-columns: auto auto auto;
+		align-items: center;
+		gap: 8px;
+		padding: 6px;
+		border: 1px solid rgba(124, 146, 180, 0.16);
+		border-radius: 9px;
+		background: rgba(8, 18, 31, 0.72);
+	}
+
+	.environment-badge {
+		min-height: 30px;
+		border: 1px solid rgba(84, 220, 170, 0.28);
+		border-radius: 7px;
+		background: rgba(38, 203, 145, 0.1);
+		color: #72edc1;
+		padding: 7px 10px;
+		font-size: 0.72rem;
+		font-weight: 900;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+
+	.environment-control[data-mode="production"] .environment-badge {
+		border-color: rgba(255, 151, 72, 0.36);
+		background: rgba(255, 116, 72, 0.12);
+		color: #ffb06d;
+	}
+
+	.environment-switch {
+		display: grid;
+		grid-template-columns: repeat(2, auto);
+		gap: 3px;
+		padding: 3px;
+		border: 1px solid rgba(124, 146, 180, 0.16);
+		border-radius: 8px;
+		background: #07111d;
+	}
+
+	.environment-switch button {
+		min-height: 30px;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: #94a4bd;
+		cursor: pointer;
+		padding: 0 10px;
+		font-size: 0.76rem;
+		font-weight: 850;
+	}
+
+	.environment-switch button.active {
+		background: rgba(52, 212, 156, 0.16);
+		color: #a8f9dc;
+	}
+
+	.environment-control[data-mode="production"] .environment-switch button.active {
+		background: rgba(255, 116, 72, 0.16);
+		color: #ffc08b;
+	}
+
+	.environment-switch button:disabled {
+		cursor: wait;
+		opacity: 0.62;
+	}
+
+	.environment-control a {
+		min-height: 30px;
+		border: 1px solid rgba(124, 146, 180, 0.18);
+		border-radius: 7px;
+		color: #cbd8eb;
+		padding: 7px 10px;
+		font-size: 0.76rem;
+		font-weight: 800;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.environment-control a:hover {
+		border-color: rgba(143, 178, 255, 0.42);
+		color: #ffffff;
 	}
 
 	.counters {
@@ -940,6 +1143,10 @@
 		color: #ff8290;
 	}
 
+	.status-badge[data-status="Superseded"] {
+		color: #a8b5c8;
+	}
+
 	.meta-line {
 		display: flex;
 		flex-wrap: wrap;
@@ -1061,12 +1268,22 @@
 
 	@media (max-width: 900px) {
 		.review-shell {
-			padding-top: 152px;
+			padding-top: 172px;
 		}
 
 		.topbar {
 			display: grid;
 			align-items: stretch;
+		}
+
+		.topbar-tools {
+			display: grid;
+			gap: 10px;
+		}
+
+		.environment-control {
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			justify-content: start;
 		}
 
 		.counters {
@@ -1084,6 +1301,7 @@
 
 		.analysis-row {
 			grid-template-columns: 132px minmax(0, 1fr);
+			gap: 14px;
 		}
 
 		.thumbnail {
@@ -1100,7 +1318,33 @@
 
 	@media (max-width: 620px) {
 		.review-shell {
-			padding-top: 162px;
+			padding: 246px 12px 24px;
+		}
+
+		.access-panel {
+			grid-template-columns: 1fr;
+			margin: 0;
+		}
+
+		.brand-block {
+			align-items: start;
+		}
+
+		.api-source {
+			max-width: 100%;
+			white-space: normal;
+		}
+
+		.environment-control {
+			grid-template-columns: 1fr;
+		}
+
+		.environment-switch {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.environment-control a {
+			text-align: center;
 		}
 
 		.counters button {
@@ -1122,12 +1366,13 @@
 
 		.analysis-row {
 			grid-template-columns: 1fr;
+			padding: 14px;
 		}
 
 		.thumbnail {
 			width: 100%;
 			height: auto;
-			aspect-ratio: 16 / 8;
+			aspect-ratio: 16 / 9;
 		}
 
 		.analysis-topline {
@@ -1136,6 +1381,11 @@
 
 		.badges {
 			flex-wrap: wrap;
+			justify-content: start;
+		}
+
+		.actions {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

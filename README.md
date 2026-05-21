@@ -63,7 +63,9 @@ The frontend uses environment variables for API communication.
 Create a `.env` file in the `frontend` folder:
 
 ```
-VITE_API_BASE_URL=https://localhost:7032
+PUBLIC_API_BASE_URL=https://veridict-53fa.onrender.com
+PUBLIC_LOCAL_API_BASE_URL=http://localhost:5293
+PUBLIC_REVIEW_API_TOKEN=your-local-review-token
 ```
 
 ### Production
@@ -71,8 +73,10 @@ VITE_API_BASE_URL=https://localhost:7032
 Set this in GitHub Secrets:
 
 ```
-VITE_API_BASE_URL=https://veridict-53fa.onrender.com
+PUBLIC_API_BASE_URL=https://veridict-53fa.onrender.com
 ```
+
+Do not set `PUBLIC_ENABLE_INTERNAL_REVIEW` or `PUBLIC_REVIEW_API_TOKEN` for the public frontend deployment.
 
 ---
 
