@@ -35,6 +35,8 @@
 	type ScreenshotRefreshResponse = {
 		success: boolean;
 		message?: string;
+		failureReason?: string;
+		failureStage?: string;
 		analysis?: ReviewAnalysis;
 	};
 
@@ -49,6 +51,7 @@
 	let actionId = $state<string | null>(null);
 	let error = $state("");
 	let imageFailures = $state<string[]>([]);
+	let screenshotFailureReasons = $state<Record<string, string>>({});
 
 	const pendingCount = $derived(countByStatus("PendingReview"));
 	const approvedCount = $derived(countByStatus("Approved"));
@@ -109,6 +112,7 @@
 		setStoredApiEnvironmentMode(mode);
 		analyses = [];
 		imageFailures = [];
+		screenshotFailureReasons = {};
 		await loadAnalyses();
 	}
 
@@ -179,11 +183,31 @@
 
 			const payload = (await response.json()) as ScreenshotRefreshResponse;
 
-			if (!payload.success || !payload.analysis) {
+			if (!payload.analysis) {
 				throw new Error(payload.message || "Screenshot refresh failed.");
 			}
 
+			if (!payload.success) {
+				const reason = [payload.failureStage, payload.failureReason]
+					.filter(Boolean)
+					.join(": ");
+
+				screenshotFailureReasons = {
+					...screenshotFailureReasons,
+					[payload.analysis.id]: reason || payload.message || "Screenshot refresh failed.",
+				};
+
+				analyses = mergeAnalyses([
+					...analyses.filter((analysis) => analysis.id !== payload.analysis!.id),
+					payload.analysis,
+				]);
+
+				return;
+			}
+
 			imageFailures = imageFailures.filter((failedId) => failedId !== payload.analysis!.id);
+			const { [payload.analysis.id]: _removed, ...remainingFailureReasons } = screenshotFailureReasons;
+			screenshotFailureReasons = remainingFailureReasons;
 			analyses = mergeAnalyses([
 				...analyses.filter((analysis) => analysis.id !== payload.analysis!.id),
 				payload.analysis,
@@ -288,6 +312,10 @@
 		if (!imageFailures.includes(id)) {
 			imageFailures = [...imageFailures, id];
 		}
+	}
+
+	function screenshotFailureReason(id: string) {
+		return screenshotFailureReasons[id] || "";
 	}
 
 	async function reviewFetch(path: string, init: RequestInit = {}) {
@@ -510,6 +538,13 @@
 									{#if analysis.replacementTargetId}
 										<span>Replaces {analysis.replacementTargetTitle || "approved entry"}</span>
 									{/if}
+								</div>
+							{/if}
+
+							{#if screenshotFailureReason(analysis.id)}
+								<div class="screenshot-failure">
+									<span>Screenshot failed</span>
+									<p>{screenshotFailureReason(analysis.id)}</p>
 								</div>
 							{/if}
 
@@ -1178,6 +1213,29 @@
 		padding: 3px 9px;
 		font-size: 0.74rem;
 		font-weight: 850;
+	}
+
+	.screenshot-failure {
+		display: grid;
+		gap: 5px;
+		border: 1px solid rgba(255, 116, 72, 0.24);
+		border-radius: 7px;
+		background: rgba(255, 116, 72, 0.08);
+		padding: 8px 10px;
+	}
+
+	.screenshot-failure span {
+		color: #ffb06d;
+		font-size: 0.72rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+
+	.screenshot-failure p {
+		margin: 0;
+		color: #ffd5bd;
+		font-size: 0.8rem;
+		line-height: 1.45;
 	}
 
 	.summary {
