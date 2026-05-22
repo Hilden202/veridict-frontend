@@ -135,7 +135,9 @@
 		}
 	}
 
-	async function reviewAction(id: string, action: "approve" | "reject") {
+	type ReviewAction = "approve" | "reject" | "remove-from-catalog";
+
+	async function reviewAction(id: string, action: ReviewAction) {
 		if (actionId) return;
 
 		actionId = id;
@@ -161,10 +163,15 @@
 				]);
 			}
 		} catch (err) {
-			error = `Could not ${action} this analysis. ${errorFromUnknown(err)}`;
+			error = `Could not ${reviewActionLabel(action)} this analysis. ${errorFromUnknown(err)}`;
 		} finally {
 			actionId = null;
 		}
+	}
+
+	function reviewActionLabel(action: ReviewAction) {
+		if (action === "remove-from-catalog") return "remove from catalog";
+		return action;
 	}
 
 	async function refreshScreenshot(id: string) {
@@ -587,6 +594,17 @@
 									type="button"
 								>
 									Reject
+								</button>
+							{/if}
+
+							{#if normalizeStatus(analysis.status) === "Approved"}
+								<button
+									class="remove"
+									disabled={actionId === analysis.id}
+									onclick={() => reviewAction(analysis.id, "remove-from-catalog")}
+									type="button"
+								>
+									Remove from catalog
 								</button>
 							{/if}
 						</div>
@@ -1288,6 +1306,15 @@
 		border-color: rgba(255, 75, 97, 0.34);
 		background: rgba(255, 75, 97, 0.1);
 		color: #ff8290;
+	}
+
+	.actions .remove {
+		min-height: 42px;
+		border-color: rgba(255, 176, 64, 0.34);
+		background: rgba(255, 176, 64, 0.1);
+		color: #ffc26d;
+		line-height: 1.16;
+		white-space: normal;
 	}
 
 	.empty-state {
