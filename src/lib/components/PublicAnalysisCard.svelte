@@ -75,13 +75,28 @@
 	</div>
 
 	<div class="copy">
-		<div class="meta">
-			<span>{item.category || "Uncategorized"}</span>
-			<small>{displayHost(item.url)}</small>
+		<div class="copy-head">
+			<div class="meta">
+				<span>{item.category || "Uncategorized"}</span>
+				<small>{displayHost(item.url)}</small>
+			</div>
+
+			<div class="compact-score" aria-label={`Score ${formatScore(item.score)} out of 10`}>
+				<small>Score</small>
+				<strong>{formatScore(item.score)}</strong>
+			</div>
 		</div>
 
 		<h3>{item.title || displayHost(item.url) || "Untitled site"}</h3>
 		<p>{item.summary || "Approved Veridict analysis."}</p>
+
+		{#if compact && item.topics?.length}
+			<div class="topics" aria-label="Topics">
+				{#each item.topics.slice(0, 3) as topic}
+					<span>{topic}</span>
+				{/each}
+			</div>
+		{/if}
 	</div>
 </a>
 
@@ -109,11 +124,30 @@
 		transform: translateY(-3px);
 	}
 
+	.catalog-card.compact {
+		grid-template-columns: clamp(136px, 22vw, 168px) minmax(0, 1fr);
+		align-items: stretch;
+		min-height: 112px;
+		border-radius: 10px;
+		box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+	}
+
+	.catalog-card.compact:hover {
+		box-shadow: 0 18px 42px rgba(0, 0, 0, 0.26);
+		transform: translateY(-1px);
+	}
+
 	.shot {
 		position: relative;
 		overflow: hidden;
 		aspect-ratio: 16 / 9;
 		background: #06101b;
+	}
+
+	.compact .shot {
+		height: 100%;
+		min-height: 112px;
+		aspect-ratio: auto;
 	}
 
 	img {
@@ -170,11 +204,20 @@
 		font-size: 1rem;
 	}
 
+	.compact .score-ring {
+		display: none;
+	}
+
 	.copy {
 		display: grid;
 		gap: 10px;
 		padding: 16px;
 		min-width: 0;
+	}
+
+	.copy-head {
+		display: grid;
+		gap: 10px;
 	}
 
 	.meta {
@@ -205,6 +248,63 @@
 		white-space: nowrap;
 	}
 
+	.compact-score {
+		display: none;
+	}
+
+	.compact .copy {
+		align-content: start;
+		gap: 8px;
+		padding: 11px 14px 12px;
+	}
+
+	.compact .copy-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.compact .meta {
+		justify-content: flex-start;
+		flex-wrap: wrap;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	.compact .meta span {
+		min-height: 22px;
+		padding: 0 8px;
+		font-size: 0.69rem;
+	}
+
+	.compact .compact-score {
+		display: grid;
+		flex: 0 0 48px;
+		width: 48px;
+		height: 48px;
+		place-items: center;
+		align-content: center;
+		border: 2px solid rgba(87, 239, 123, 0.7);
+		border-radius: 50%;
+		background: rgba(3, 9, 16, 0.72);
+		box-shadow: 0 0 18px rgba(53, 245, 110, 0.16);
+	}
+
+	.compact-score small {
+		color: #88a0bd;
+		font-size: 0.58rem;
+		font-weight: 900;
+		line-height: 1;
+		text-transform: uppercase;
+	}
+
+	.compact-score strong {
+		color: #ffffff;
+		font-size: 0.95rem;
+		line-height: 1;
+	}
+
 	h3 {
 		margin: 0;
 		overflow: hidden;
@@ -226,8 +326,55 @@
 		line-clamp: 3;
 	}
 
-	.compact .copy {
-		padding: 14px;
+	.compact h3 {
+		font-size: 1rem;
+	}
+
+	.compact p {
+		font-size: 0.86rem;
+		line-height: 1.42;
+		-webkit-line-clamp: 1;
+		line-clamp: 1;
+	}
+
+	.topics {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.topics span {
+		display: inline-flex;
+		max-width: 100%;
+		min-height: 22px;
+		align-items: center;
+		overflow: hidden;
+		border: 1px solid rgba(133, 157, 192, 0.2);
+		border-radius: 999px;
+		background: rgba(133, 157, 192, 0.08);
+		color: #b7c5d8;
+		padding: 0 8px;
+		font-size: 0.69rem;
+		font-weight: 800;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	@media (max-width: 760px) {
+		.catalog-card.compact {
+			grid-template-columns: minmax(118px, 34vw) minmax(0, 1fr);
+			min-height: 104px;
+		}
+
+		.compact .shot {
+			min-height: 104px;
+			aspect-ratio: auto;
+		}
+
+		.compact .copy {
+			padding: 11px 12px;
+		}
 	}
 
 	@media (max-width: 520px) {
@@ -248,6 +395,37 @@
 
 		.copy {
 			padding: 14px;
+		}
+
+		.catalog-card.compact {
+			grid-template-columns: 1fr;
+			min-height: 0;
+		}
+
+		.compact .shot {
+			min-height: 0;
+			aspect-ratio: 16 / 9;
+		}
+
+		.compact p {
+			-webkit-line-clamp: 2;
+			line-clamp: 2;
+		}
+
+		.compact .copy-head {
+			display: grid;
+			gap: 10px;
+		}
+
+		.compact .compact-score {
+			display: flex;
+			width: fit-content;
+			height: 34px;
+			min-width: 78px;
+			gap: 6px;
+			justify-content: center;
+			padding: 0 10px;
+			border-radius: 999px;
 		}
 
 		.meta {
