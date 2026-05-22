@@ -51,6 +51,8 @@
     };
 
     const ANALYSIS_STORAGE_KEY_PREFIX = "veridict:last-analysis";
+    const INITIAL_CATALOG_RESULT_LIMIT = 10;
+    const CATALOG_RESULT_INCREMENT = 10;
 
     let publicApiMode = $state<ApiEnvironmentMode>("production");
     let url = $state("");
@@ -72,6 +74,7 @@
     let restored = $state(false);
     let catalogInput = $state<HTMLInputElement | undefined>(undefined);
     let urlInput = $state<HTMLInputElement | undefined>(undefined);
+    let visibleCatalogResultCount = $state(INITIAL_CATALOG_RESULT_LIMIT);
 
     const publicEnvironment = $derived(getApiEnvironmentConfig(publicApiMode));
     const API_BASE = $derived(publicEnvironment.apiBaseUrl);
@@ -120,6 +123,17 @@
     const statusTime = $derived(
         analyzedAt ? formatRelative(analyzedAt) : "Waiting for URL",
     );
+    const visibleCatalogResults = $derived(
+        catalogResults.slice(0, visibleCatalogResultCount),
+    );
+    const hasMoreCatalogResults = $derived(
+        visibleCatalogResultCount < catalogResults.length,
+    );
+    const catalogResultRangeText = $derived(
+        catalogResults.length
+            ? `Showing 1-${Math.min(visibleCatalogResultCount, catalogResults.length)} of ${catalogResults.length} matches`
+            : "No approved matches",
+    );
 
     function createLoadingResult(currentUrl: string): AnalysisResult {
         return {
@@ -146,6 +160,7 @@
 
     function clearCatalogQuery() {
         catalogQuery = "";
+        visibleCatalogResultCount = INITIAL_CATALOG_RESULT_LIMIT;
         catalogInput?.focus();
     }
 
@@ -287,12 +302,20 @@
             }
 
             catalogResults = (await res.json()) as CatalogItem[];
+            visibleCatalogResultCount = INITIAL_CATALOG_RESULT_LIMIT;
             catalogSearched = true;
         } catch {
             catalogError = "Could not search the approved catalog.";
         } finally {
             catalogLoading = false;
         }
+    }
+
+    function loadMoreCatalogResults() {
+        visibleCatalogResultCount = Math.min(
+            visibleCatalogResultCount + CATALOG_RESULT_INCREMENT,
+            catalogResults.length,
+        );
     }
 
     function shuffle<T>(items: T[]) {
@@ -349,7 +372,7 @@
 
     <main class="workspace">
         <section class="content">
-            <header class="hero">
+            <header class="hero" id="search">
                 <div>
                     <h1>Discover high quality websites</h1>
                     <p>
@@ -400,13 +423,21 @@
                     <section class="catalog-results">
                         <div class="catalog-heading">
                             <span>Approved results</span>
-                            <strong>{catalogResults.length} matches</strong>
+                            <strong>{catalogResultRangeText}</strong>
                         </div>
                         <div class="public-card-grid compact">
-                            {#each catalogResults.slice(0, 6) as item}
+                            {#each visibleCatalogResults as item}
                                 <PublicAnalysisCard {item} apiBase={API_BASE} publicAssetBase={PUBLIC_CATALOG_BASE} compact />
                             {/each}
                         </div>
+                        {#if hasMoreCatalogResults}
+                            <div class="catalog-load-more">
+                                <span>{catalogResultRangeText}</span>
+                                <button onclick={loadMoreCatalogResults} type="button">
+                                    Load more
+                                </button>
+                            </div>
+                        {/if}
                     </section>
                 {:else if catalogError}
                     <p class="catalog-error">{catalogError}</p>
@@ -414,7 +445,7 @@
                     <p class="catalog-empty">No approved catalog matches yet.</p>
                 {/if}
 
-                <div class="analyze-secondary">
+                <div class="analyze-secondary" id="analyze">
                     <div class="catalog-heading">
                         <span>Analyze for review</span>
                         <strong>Secondary workflow</strong>
@@ -513,11 +544,11 @@
                 <section class="empty-state">
                     <div>
                         <span>✣</span>
-                        <h2>Start with a URL</h2>
+                        <h2>Search the approved catalog</h2>
                         <p>
-                            Paste a public website and Veridict will score its
-                            content quality, clarity, practical value and signal
-                            strength.
+                            Use discovery search above to compare curated
+                            analyses. Have a site to submit? The review-focused
+                            analyze workflow stays ready above.
                         </p>
                     </div>
                 </section>
@@ -864,6 +895,46 @@
     .catalog-heading strong {
         color: #dce7f8;
         font-size: 0.86rem;
+        text-align: right;
+    }
+
+    .catalog-load-more {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-top: 4px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(130, 153, 188, 0.12);
+    }
+
+    .catalog-load-more span {
+        color: #96a7c0;
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    .catalog-load-more button {
+        min-height: 42px;
+        border: 1px solid rgba(111, 158, 255, 0.32);
+        border-radius: 9px;
+        background: rgba(42, 82, 151, 0.22);
+        color: #dbe8ff;
+        cursor: pointer;
+        padding: 0 18px;
+        font-weight: 850;
+        transition:
+            background 160ms ease,
+            border-color 160ms ease,
+            color 160ms ease;
+    }
+
+    .catalog-load-more button:hover,
+    .catalog-load-more button:focus-visible {
+        border-color: rgba(126, 178, 255, 0.58);
+        background: rgba(58, 105, 186, 0.32);
+        color: #ffffff;
+        outline: 0;
     }
 
     .catalog-empty,
@@ -1332,6 +1403,20 @@
         .analyze-secondary,
         .catalog-showcase {
             padding: 14px;
+        }
+
+        .catalog-heading,
+        .catalog-load-more {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .catalog-heading strong {
+            text-align: left;
+        }
+
+        .catalog-load-more button {
+            width: 100%;
         }
 
         .score-panel {

@@ -3,11 +3,11 @@
 	import { isLocalFrontendRuntime } from "$lib/apiEnvironment";
 
 	const navItems = [
-		{ label: "Analyze", icon: "⌂", active: true },
-		{ label: "Search", icon: "⌕" },
-		{ label: "History", icon: "◷" },
-		{ label: "My Sites", icon: "▣" },
-		{ label: "Settings", icon: "⚙" },
+		{ label: "Search", icon: "⌕", href: "#search", active: true },
+		{ label: "Analyze", icon: "⌂", href: "#analyze" },
+		{ label: "History", icon: "◷", href: "#" },
+		{ label: "My Sites", icon: "▣", href: "#" },
+		{ label: "Settings", icon: "⚙", href: "#" },
 	];
 
 	let showModerationShortcut = $state(false);
@@ -25,7 +25,7 @@
 
 	<nav class:has-dev-shortcut={showModerationShortcut}>
 		{#each navItems as item}
-			<a class:active={item.active} href={item.active ? "/" : "#"}>
+			<a class:active={item.active} href={item.href}>
 				<span>{item.icon}</span>
 				{item.label}
 			</a>
