@@ -70,6 +70,8 @@
     let catalogSearched = $state(false);
     let analyzedAt = $state<Date | null>(null);
     let restored = $state(false);
+    let catalogInput = $state<HTMLInputElement | undefined>(undefined);
+    let urlInput = $state<HTMLInputElement | undefined>(undefined);
 
     const publicEnvironment = $derived(getApiEnvironmentConfig(publicApiMode));
     const API_BASE = $derived(publicEnvironment.apiBaseUrl);
@@ -140,6 +142,16 @@
         const trimmed = value.trim();
         if (!trimmed) return "";
         return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    }
+
+    function clearCatalogQuery() {
+        catalogQuery = "";
+        catalogInput?.focus();
+    }
+
+    function clearUrl() {
+        url = "";
+        urlInput?.focus();
     }
 
     function formatRelative(date: Date) {
@@ -350,10 +362,21 @@
                     <label class="catalog-field">
                         <span>⌕</span>
                         <input
+                            bind:this={catalogInput}
                             bind:value={catalogQuery}
                             placeholder="Search the approved catalog..."
                             type="search"
                         />
+                        {#if catalogQuery}
+                            <button
+                                aria-label="Clear catalog search"
+                                class="input-clear"
+                                onclick={clearCatalogQuery}
+                                type="button"
+                            >
+                                &times;
+                            </button>
+                        {/if}
                     </label>
 
                     <select bind:value={categoryFilter} aria-label="Filter by category">
@@ -404,12 +427,23 @@
                         <label class="url-field">
                             <span>◎</span>
                             <input
+                                bind:this={urlInput}
                                 bind:value={url}
                                 disabled={loading}
                                 onkeydown={handleKeydown}
                                 placeholder="Submit a website URL for analysis..."
                                 type="url"
                             />
+                            {#if url && !loading}
+                                <button
+                                    aria-label="Clear website URL"
+                                    class="input-clear"
+                                    onclick={clearUrl}
+                                    type="button"
+                                >
+                                    &times;
+                                </button>
+                            {/if}
                         </label>
 
                         <button
@@ -689,6 +723,7 @@
 
     .catalog-field,
     .url-field {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 18px;
@@ -719,6 +754,11 @@
         font-size: 1.45rem;
     }
 
+    .catalog-field input,
+    .url-field input {
+        padding-right: 42px;
+    }
+
     .catalog-search select,
     .catalog-search button {
         min-height: 64px;
@@ -745,6 +785,45 @@
     .catalog-search button:disabled {
         cursor: wait;
         opacity: 0.7;
+    }
+
+    .catalog-search .input-clear,
+    .url-field .input-clear {
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        display: grid;
+        width: 34px;
+        height: 34px;
+        min-height: 34px;
+        place-items: center;
+        border: 1px solid rgba(151, 166, 194, 0.18);
+        border-radius: 999px;
+        background: rgba(7, 16, 28, 0.48);
+        color: #9cafc9;
+        cursor: pointer;
+        font-size: 1.1rem;
+        font-weight: 850;
+        line-height: 1;
+        padding: 0;
+        transform: translateY(-50%);
+        box-shadow: none;
+        transition:
+            background 160ms ease,
+            border-color 160ms ease,
+            color 160ms ease,
+            transform 160ms ease;
+    }
+
+    .catalog-search .input-clear:hover,
+    .url-field .input-clear:hover,
+    .catalog-search .input-clear:focus-visible,
+    .url-field .input-clear:focus-visible {
+        border-color: rgba(151, 180, 255, 0.44);
+        background: rgba(30, 48, 74, 0.72);
+        color: #ffffff;
+        outline: 0;
+        transform: translateY(-50%) scale(1.03);
     }
 
     .catalog-results,
@@ -849,6 +928,10 @@
     input::placeholder {
         color: #ffffff;
         opacity: 0.92;
+    }
+
+    input[type="search"]::-webkit-search-cancel-button {
+        appearance: none;
     }
 
     .analyze-button {

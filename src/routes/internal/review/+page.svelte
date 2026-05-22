@@ -55,6 +55,7 @@
 	let error = $state("");
 	let imageFailures = $state<string[]>([]);
 	let screenshotFailureReasons = $state<Record<string, string>>({});
+	let queryInput = $state<HTMLInputElement | undefined>(undefined);
 
 	const pendingCount = $derived(countByStatus("PendingReview"));
 	const approvedCount = $derived(countByStatus("Approved"));
@@ -109,6 +110,11 @@
 		}
 	}
 
+	function clearQuery() {
+		query = "";
+		queryInput?.focus();
+	}
+
 	async function selectApiMode(mode: ApiEnvironmentMode) {
 		if (mode === apiMode || actionId) return;
 
@@ -138,7 +144,12 @@
 		}
 	}
 
-	type ReviewAction = "approve" | "reject" | "remove-from-catalog" | "restore-to-pending";
+	type ReviewAction =
+		| "approve"
+		| "reject"
+		| "remove-from-catalog"
+		| "restore-to-pending"
+		| "delete";
 
 	async function reviewAction(id: string, action: ReviewAction) {
 		if (actionId) return;
@@ -153,6 +164,11 @@
 
 			if (!response.ok) {
 				throw new Error(await readErrorMessage(response));
+			}
+
+			if (action === "delete") {
+				analyses = analyses.filter((analysis) => analysis.id !== id);
+				return;
 			}
 
 			const updated = (await response.json()) as ReviewAnalysis;
@@ -175,6 +191,7 @@
 	function reviewActionLabel(action: ReviewAction) {
 		if (action === "remove-from-catalog") return "remove from catalog";
 		if (action === "restore-to-pending") return "restore to pending";
+		if (action === "delete") return "delete";
 		return action;
 	}
 
@@ -505,10 +522,21 @@
 		<label class="search-field">
 			<span>Search</span>
 			<input
+				bind:this={queryInput}
 				bind:value={query}
 				placeholder="Filter by title, URL, category or summary"
 				type="search"
 			/>
+			{#if query}
+				<button
+					aria-label="Clear queue filter"
+					class="input-clear"
+					onclick={clearQuery}
+					type="button"
+				>
+					&times;
+				</button>
+			{/if}
 		</label>
 
 		<nav class="tabs" aria-label="Review status tabs">
@@ -679,6 +707,14 @@
 									type="button"
 								>
 									Restore to pending
+								</button>
+								<button
+									class="delete"
+									disabled={actionId === analysis.id}
+									onclick={() => reviewAction(analysis.id, "delete")}
+									type="button"
+								>
+									Delete analysis
 								</button>
 							{/if}
 						</div>
@@ -996,6 +1032,7 @@
 	}
 
 	.search-field {
+		position: relative;
 		display: grid;
 		gap: 8px;
 	}
@@ -1018,6 +1055,10 @@
 		padding: 0 14px;
 	}
 
+	.search-field input {
+		padding-right: 48px;
+	}
+
 	input:focus {
 		border-color: rgba(93, 136, 255, 0.72);
 		box-shadow: 0 0 0 4px rgba(75, 100, 255, 0.12);
@@ -1025,6 +1066,43 @@
 
 	input::placeholder {
 		color: #718096;
+	}
+
+	input[type="search"]::-webkit-search-cancel-button {
+		appearance: none;
+	}
+
+	.search-field .input-clear {
+		position: absolute;
+		right: 7px;
+		bottom: 6px;
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		border: 1px solid rgba(124, 146, 180, 0.18);
+		border-radius: 999px;
+		background: rgba(15, 28, 45, 0.78);
+		color: #8fa0ba;
+		cursor: pointer;
+		font-size: 1.08rem;
+		font-weight: 850;
+		line-height: 1;
+		padding: 0;
+		transition:
+			background 160ms ease,
+			border-color 160ms ease,
+			color 160ms ease,
+			transform 160ms ease;
+	}
+
+	.search-field .input-clear:hover,
+	.search-field .input-clear:focus-visible {
+		border-color: rgba(111, 152, 255, 0.5);
+		background: rgba(32, 52, 82, 0.92);
+		color: #ffffff;
+		outline: 0;
+		transform: scale(1.03);
 	}
 
 	.tabs {
@@ -1436,6 +1514,15 @@
 		border-color: rgba(94, 139, 255, 0.34);
 		background: rgba(57, 103, 214, 0.12);
 		color: #9bbdff;
+		line-height: 1.16;
+		white-space: normal;
+	}
+
+	.actions .delete {
+		min-height: 42px;
+		border-color: rgba(255, 75, 97, 0.34);
+		background: rgba(255, 75, 97, 0.12);
+		color: #ff9aa5;
 		line-height: 1.16;
 		white-space: normal;
 	}
