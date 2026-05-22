@@ -161,11 +161,7 @@
 		error = "";
 
 		try {
-			const currentAnalysis = analyses.find((analysis) => analysis.id === id);
-			const path =
-				action === "reanalyze" && shouldRecoverScreenshotOnReanalyze(currentAnalysis)
-					? `/internal/review/analyses/${id}/${action}?recoverScreenshot=true`
-					: `/internal/review/analyses/${id}/${action}`;
+			const path = `/internal/review/analyses/${id}/${action}`;
 			const response = await reviewFetch(path, {
 				method: "POST",
 			});
@@ -202,11 +198,6 @@
 		if (action === "reanalyze") return "reanalyze";
 		if (action === "delete") return "delete";
 		return action;
-	}
-
-	function shouldRecoverScreenshotOnReanalyze(analysis: ReviewAnalysis | undefined) {
-		if (!analysis) return false;
-		return !screenshotSource(analysis);
 	}
 
 	async function refreshScreenshot(id: string) {
