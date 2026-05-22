@@ -95,6 +95,18 @@ export function isInternalReviewEnabledForCurrentBrowser() {
 	return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 }
 
+export function isLocalFrontendRuntime() {
+	if (import.meta.env.DEV) {
+		return true;
+	}
+
+	if (typeof window === "undefined") {
+		return false;
+	}
+
+	return isLocalFrontendHost(window.location.hostname);
+}
+
 export function resolveScreenshotUrl(reference: string, environment: ApiEnvironmentConfig) {
 	if (!reference.trim()) {
 		return "";

@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { onMount } from "svelte";
+	import { isLocalFrontendRuntime } from "$lib/apiEnvironment";
+
 	const navItems = [
 		{ label: "Analyze", icon: "⌂", active: true },
 		{ label: "Search", icon: "⌕" },
@@ -6,6 +9,12 @@
 		{ label: "My Sites", icon: "▣" },
 		{ label: "Settings", icon: "⚙" },
 	];
+
+	let showModerationShortcut = $state(false);
+
+	onMount(() => {
+		showModerationShortcut = isLocalFrontendRuntime();
+	});
 </script>
 
 <aside class="sidebar" aria-label="Primary navigation">
@@ -14,13 +23,20 @@
 		<strong>Veridict</strong>
 	</a>
 
-	<nav>
+	<nav class:has-dev-shortcut={showModerationShortcut}>
 		{#each navItems as item}
 			<a class:active={item.active} href={item.active ? "/" : "#"}>
 				<span>{item.icon}</span>
 				{item.label}
 			</a>
 		{/each}
+		{#if showModerationShortcut}
+			<a class="dev-shortcut" href="/internal/review">
+				<span>▦</span>
+				Review
+				<em>LOCAL</em>
+			</a>
+		{/if}
 	</nav>
 
 	<div class="sidebar-spacer"></div>
@@ -160,6 +176,34 @@
 		);
 		color: #ffffff;
 		transform: translateX(2px);
+	}
+
+	nav a.dev-shortcut {
+		position: relative;
+		border: 1px solid rgba(83, 218, 168, 0.26);
+		background: rgba(29, 104, 89, 0.16);
+		color: #d6fff1;
+	}
+
+	nav a.dev-shortcut:hover {
+		background: linear-gradient(
+			100deg,
+			rgba(24, 116, 91, 0.62),
+			rgba(41, 93, 143, 0.5)
+		);
+	}
+
+	nav a.dev-shortcut em {
+		margin-left: auto;
+		padding: 4px 6px;
+		border: 1px solid rgba(113, 238, 194, 0.28);
+		border-radius: 999px;
+		background: rgba(44, 214, 153, 0.1);
+		color: #88f4cf;
+		font-size: 0.62rem;
+		font-style: normal;
+		font-weight: 900;
+		letter-spacing: 0;
 	}
 
 	nav span {
@@ -328,11 +372,25 @@
 			padding-bottom: 22px;
 		}
 
+		nav.has-dev-shortcut {
+			grid-template-columns: repeat(6, minmax(0, 1fr));
+		}
+
 		nav a {
 			justify-content: center;
 			min-height: 46px;
 			padding: 0 8px;
 			font-size: 0.86rem;
+		}
+
+		nav a.dev-shortcut {
+			gap: 8px;
+		}
+
+		nav a.dev-shortcut em {
+			margin-left: 0;
+			padding: 3px 5px;
+			font-size: 0.56rem;
 		}
 
 		nav span,

@@ -159,7 +159,12 @@
 		error = "";
 
 		try {
-			const response = await reviewFetch(`/internal/review/analyses/${id}/${action}`, {
+			const currentAnalysis = analyses.find((analysis) => analysis.id === id);
+			const path =
+				action === "reanalyze" && shouldRecoverScreenshotOnReanalyze(currentAnalysis)
+					? `/internal/review/analyses/${id}/${action}?recoverScreenshot=true`
+					: `/internal/review/analyses/${id}/${action}`;
+			const response = await reviewFetch(path, {
 				method: "POST",
 			});
 
@@ -197,6 +202,11 @@
 		return action;
 	}
 
+	function shouldRecoverScreenshotOnReanalyze(analysis: ReviewAnalysis | undefined) {
+		if (!analysis) return false;
+		return !screenshotSource(analysis);
+	}
+
 	async function refreshScreenshot(id: string) {
 		if (actionId) return;
 
@@ -232,6 +242,7 @@
 					...analyses.filter((analysis) => analysis.id !== payload.analysis!.id),
 					payload.analysis,
 				]);
+				await loadAnalyses();
 
 				return;
 			}
@@ -243,6 +254,7 @@
 				...analyses.filter((analysis) => analysis.id !== payload.analysis!.id),
 				payload.analysis,
 			]);
+			await loadAnalyses();
 		} catch {
 			error = "Could not refresh this screenshot. See API logs for render details.";
 		} finally {
