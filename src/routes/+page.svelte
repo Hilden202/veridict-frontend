@@ -16,6 +16,8 @@
         alreadyPending?: boolean;
         siteTitle?: string;
         status?: string;
+        contentState?: string;
+        contentStateReason?: string;
         url?: string;
         intent?: string;
         score?: number;
@@ -110,6 +112,8 @@
     const statusText = $derived(
         loading
             ? "Analysis in progress"
+            : result?.contentState === "VerificationBlocked"
+              ? "Browser verification required"
             : result?.alreadyApproved
               ? "Already approved in the catalog"
               : result?.alreadyPending
@@ -333,6 +337,7 @@
     }
 
     function getScoreLabel(score?: number) {
+        if (visibleResult?.contentState === "VerificationBlocked") return "Verification blocked";
         if (!score) return "Analysis ready";
         if (score >= 8) return "High quality";
         if (score >= 6) return "Good quality with room to grow";
@@ -515,6 +520,14 @@
                                 ? "Analyzing quality signals"
                                 : getScoreLabel(visibleResult.score)}
                         </h2>
+                        {#if visibleResult.contentState === "VerificationBlocked"}
+                            <div class="analysis-warning">
+                                <strong>Browser verification detected</strong>
+                                <span>
+                                    {visibleResult.contentStateReason || "Veridict did not score this as genuine site content. It will need review or a later reanalysis attempt."}
+                                </span>
+                            </div>
+                        {/if}
                         <p>{visibleResult.summary}</p>
                         <ScoreBars items={scoreItems} {loading} />
                     </div>
@@ -1138,6 +1151,28 @@
         color: #c4cedd;
         font-size: 1.02rem;
         line-height: 1.58;
+    }
+
+    .analysis-warning {
+        display: grid;
+        gap: 6px;
+        max-width: 520px;
+        border: 1px solid rgba(255, 151, 84, 0.3);
+        border-radius: 8px;
+        background: rgba(255, 126, 74, 0.1);
+        padding: 11px 12px;
+    }
+
+    .analysis-warning strong {
+        color: #ffd1a8;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+    }
+
+    .analysis-warning span {
+        color: #ffdcc4;
+        font-size: 0.92rem;
+        line-height: 1.45;
     }
 
     .cards-grid {

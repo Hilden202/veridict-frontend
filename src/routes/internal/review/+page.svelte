@@ -22,6 +22,8 @@
 		category?: string;
 		score?: number;
 		status?: ReviewStatus | string;
+		contentState?: string;
+		contentStateReason?: string;
 		summary?: string;
 		createdAt?: string;
 		lastAnalyzedAt?: string;
@@ -316,6 +318,10 @@
 		if (score >= 6) return "good";
 		if (score >= 4) return "watch";
 		return "low";
+	}
+
+	function isVerificationBlocked(analysis: ReviewAnalysis) {
+		return analysis.contentState === "VerificationBlocked";
 	}
 
 	function formatDate(value?: string) {
@@ -638,13 +644,22 @@
 
 								<div class="badges">
 									<span class="score-badge" data-tone={scoreTone(analysis.score)}
-										>{formatScore(analysis.score)}</span
+										>{isVerificationBlocked(analysis) ? "Blocked" : formatScore(analysis.score)}</span
 									>
 									<span class="status-badge" data-status={normalizeStatus(analysis.status)}
 										>{statusLabel(analysis.status)}</span
 									>
 								</div>
 							</div>
+
+							{#if isVerificationBlocked(analysis)}
+								<div class="content-warning">
+									<span>Browser verification detected</span>
+									<p>
+										{analysis.contentStateReason || "This appears to be a security or human-verification page, not genuine site content. Reanalyze later or reject it; approval is blocked until real content is available."}
+									</p>
+								</div>
+							{/if}
 
 							<div class="meta-line">
 								<span>{analysis.category || "Uncategorized"}</span>
@@ -715,7 +730,7 @@
 								</button>
 								<button
 									class="approve"
-									disabled={actionId === analysis.id}
+									disabled={actionId === analysis.id || isVerificationBlocked(analysis)}
 									onclick={() => reviewAction(analysis.id, "approve")}
 									type="button"
 								>
@@ -1436,6 +1451,29 @@
 		padding: 3px 9px;
 		font-size: 0.74rem;
 		font-weight: 850;
+	}
+
+	.content-warning {
+		display: grid;
+		gap: 6px;
+		border: 1px solid rgba(255, 104, 92, 0.32);
+		border-radius: 7px;
+		background: rgba(255, 88, 78, 0.09);
+		padding: 9px 10px;
+	}
+
+	.content-warning span {
+		color: #ffb1aa;
+		font-size: 0.72rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+
+	.content-warning p {
+		margin: 0;
+		color: #ffc9c5;
+		font-size: 0.8rem;
+		line-height: 1.45;
 	}
 
 	.replacement-comparison {
