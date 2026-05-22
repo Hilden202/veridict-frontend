@@ -147,6 +147,7 @@
 	type ReviewAction =
 		| "approve"
 		| "reject"
+		| "reanalyze"
 		| "remove-from-catalog"
 		| "restore-to-pending"
 		| "delete";
@@ -173,7 +174,7 @@
 
 			const updated = (await response.json()) as ReviewAnalysis;
 
-			if (action === "approve" || action === "restore-to-pending") {
+			if (action === "approve" || action === "restore-to-pending" || action === "reanalyze") {
 				await loadAnalyses();
 			} else {
 				analyses = mergeAnalyses([
@@ -191,6 +192,7 @@
 	function reviewActionLabel(action: ReviewAction) {
 		if (action === "remove-from-catalog") return "remove from catalog";
 		if (action === "restore-to-pending") return "restore to pending";
+		if (action === "reanalyze") return "reanalyze";
 		if (action === "delete") return "delete";
 		return action;
 	}
@@ -670,6 +672,14 @@
 							</button>
 
 							{#if normalizeStatus(analysis.status) === "PendingReview"}
+								<button
+									class="reanalyze"
+									disabled={actionId === analysis.id}
+									onclick={() => reviewAction(analysis.id, "reanalyze")}
+									type="button"
+								>
+									Reanalyze
+								</button>
 								<button
 									class="approve"
 									disabled={actionId === analysis.id}
@@ -1492,6 +1502,12 @@
 		border-color: rgba(94, 139, 255, 0.34);
 		background: rgba(57, 103, 214, 0.12);
 		color: #9bbdff;
+	}
+
+	.actions .reanalyze {
+		border-color: rgba(121, 236, 209, 0.34);
+		background: rgba(67, 220, 188, 0.1);
+		color: #8ff4de;
 	}
 
 	.actions .reject {
