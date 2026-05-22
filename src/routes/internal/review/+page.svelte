@@ -24,6 +24,7 @@
 		status?: ReviewStatus | string;
 		summary?: string;
 		createdAt?: string;
+		lastAnalyzedAt?: string;
 		pendingDuplicateCount?: number;
 		hasPendingDuplicates?: boolean;
 		alreadyApprovedInProduction?: boolean;
@@ -33,6 +34,7 @@
 		replacementTargetCategory?: string;
 		replacementTargetScore?: number;
 		replacementTargetCreatedAt?: string;
+		replacementTargetLastAnalyzedAt?: string;
 	};
 
 	type ScreenshotRefreshResponse = {
@@ -340,6 +342,21 @@
 		}).format(date);
 	}
 
+	function analysisTimestamp(analysis: ReviewAnalysis) {
+		return analysis.lastAnalyzedAt || analysis.createdAt;
+	}
+
+	function hasSeparateCreatedAt(analysis: ReviewAnalysis) {
+		if (!analysis.lastAnalyzedAt || !analysis.createdAt) return false;
+
+		const analyzedAt = new Date(analysis.lastAnalyzedAt).getTime();
+		const createdAt = new Date(analysis.createdAt).getTime();
+
+		if (Number.isNaN(analyzedAt) || Number.isNaN(createdAt)) return false;
+
+		return analyzedAt !== createdAt;
+	}
+
 	function formatHost(value?: string) {
 		if (!value) return "";
 
@@ -383,6 +400,15 @@
 	function replacementCreatedAt(analysis: ReviewAnalysis) {
 		const target = replacementAnalysisFor(analysis);
 		return analysis.replacementTargetCreatedAt || target?.createdAt;
+	}
+
+	function replacementTimestamp(analysis: ReviewAnalysis) {
+		const target = replacementAnalysisFor(analysis);
+		return (
+			analysis.replacementTargetLastAnalyzedAt ||
+			target?.lastAnalyzedAt ||
+			replacementCreatedAt(analysis)
+		);
 	}
 
 	function screenshotSource(analysis: ReviewAnalysis) {
@@ -632,7 +658,11 @@
 							<div class="meta-line">
 								<span>{analysis.category || "Uncategorized"}</span>
 								<i></i>
-								<span>{formatDate(analysis.createdAt)}</span>
+								<span>Analyzed {formatDate(analysisTimestamp(analysis))}</span>
+								{#if hasSeparateCreatedAt(analysis)}
+									<i></i>
+									<span>Created {formatDate(analysis.createdAt)}</span>
+								{/if}
 							</div>
 
 							{#if analysis.hasPendingDuplicates || analysis.alreadyApprovedInProduction || analysis.replacementTargetId}
@@ -656,8 +686,8 @@
 										<strong>{replacementTitle(analysis)}</strong>
 										<em>Score {formatScore(replacementScore(analysis))}</em>
 										<em>{replacementCategory(analysis)}</em>
-										{#if replacementCreatedAt(analysis)}
-											<em>{formatDate(replacementCreatedAt(analysis))}</em>
+										{#if replacementTimestamp(analysis)}
+											<em>{formatDate(replacementTimestamp(analysis))}</em>
 										{/if}
 									</p>
 								</div>
