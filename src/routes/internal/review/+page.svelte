@@ -29,6 +29,9 @@
 		alreadyApprovedInProduction?: boolean;
 		replacementTargetId?: string;
 		replacementTargetTitle?: string;
+		replacementTargetUrl?: string;
+		replacementTargetCategory?: string;
+		replacementTargetScore?: number;
 		replacementTargetCreatedAt?: string;
 	};
 
@@ -135,7 +138,7 @@
 		}
 	}
 
-	type ReviewAction = "approve" | "reject" | "remove-from-catalog";
+	type ReviewAction = "approve" | "reject" | "remove-from-catalog" | "restore-to-pending";
 
 	async function reviewAction(id: string, action: ReviewAction) {
 		if (actionId) return;
@@ -154,7 +157,7 @@
 
 			const updated = (await response.json()) as ReviewAnalysis;
 
-			if (action === "approve") {
+			if (action === "approve" || action === "restore-to-pending") {
 				await loadAnalyses();
 			} else {
 				analyses = mergeAnalyses([
@@ -171,6 +174,7 @@
 
 	function reviewActionLabel(action: ReviewAction) {
 		if (action === "remove-from-catalog") return "remove from catalog";
+		if (action === "restore-to-pending") return "restore to pending";
 		return action;
 	}
 
@@ -303,6 +307,51 @@
 			hour: "2-digit",
 			minute: "2-digit",
 		}).format(date);
+	}
+
+	function formatHost(value?: string) {
+		if (!value) return "";
+
+		try {
+			return new URL(value).hostname.replace(/^www\./, "");
+		} catch {
+			return value.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+		}
+	}
+
+	function replacementAnalysisFor(analysis: ReviewAnalysis) {
+		if (!analysis.replacementTargetId) return null;
+		return (
+			analyses.find((candidate) => candidate.id === analysis.replacementTargetId) ??
+			null
+		);
+	}
+
+	function replacementTitle(analysis: ReviewAnalysis) {
+		const target = replacementAnalysisFor(analysis);
+		return (
+			analysis.replacementTargetTitle ||
+			target?.siteTitle ||
+			formatHost(analysis.replacementTargetUrl || target?.url) ||
+			"Approved entry"
+		);
+	}
+
+	function replacementScore(analysis: ReviewAnalysis) {
+		const target = replacementAnalysisFor(analysis);
+		return typeof analysis.replacementTargetScore === "number"
+			? analysis.replacementTargetScore
+			: target?.score;
+	}
+
+	function replacementCategory(analysis: ReviewAnalysis) {
+		const target = replacementAnalysisFor(analysis);
+		return analysis.replacementTargetCategory || target?.category || "Uncategorized";
+	}
+
+	function replacementCreatedAt(analysis: ReviewAnalysis) {
+		const target = replacementAnalysisFor(analysis);
+		return analysis.replacementTargetCreatedAt || target?.createdAt;
 	}
 
 	function screenshotSource(analysis: ReviewAnalysis) {
@@ -558,6 +607,20 @@
 								</div>
 							{/if}
 
+							{#if normalizeStatus(analysis.status) === "PendingReview" && analysis.replacementTargetId}
+								<div class="replacement-comparison">
+									<span>Replaces approved analysis</span>
+									<p>
+										<strong>{replacementTitle(analysis)}</strong>
+										<em>Score {formatScore(replacementScore(analysis))}</em>
+										<em>{replacementCategory(analysis)}</em>
+										{#if replacementCreatedAt(analysis)}
+											<em>{formatDate(replacementCreatedAt(analysis))}</em>
+										{/if}
+									</p>
+								</div>
+							{/if}
+
 							{#if screenshotFailureReason(analysis.id)}
 								<div class="screenshot-failure">
 									<span>Screenshot failed</span>
@@ -605,6 +668,17 @@
 									type="button"
 								>
 									Remove from catalog
+								</button>
+							{/if}
+
+							{#if normalizeStatus(analysis.status) === "Rejected"}
+								<button
+									class="restore"
+									disabled={actionId === analysis.id}
+									onclick={() => reviewAction(analysis.id, "restore-to-pending")}
+									type="button"
+								>
+									Restore to pending
 								</button>
 							{/if}
 						</div>
@@ -1243,6 +1317,46 @@
 		font-weight: 850;
 	}
 
+	.replacement-comparison {
+		display: grid;
+		gap: 6px;
+		border: 1px solid rgba(255, 190, 64, 0.24);
+		border-radius: 7px;
+		background: rgba(255, 184, 56, 0.07);
+		padding: 9px 10px;
+	}
+
+	.replacement-comparison > span {
+		color: #ffd16b;
+		font-size: 0.72rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+
+	.replacement-comparison p {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 7px;
+		align-items: center;
+		margin: 0;
+		color: #c8d4e5;
+		font-size: 0.8rem;
+		line-height: 1.35;
+	}
+
+	.replacement-comparison strong {
+		max-width: 220px;
+		overflow: hidden;
+		color: #ffffff;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.replacement-comparison em {
+		color: #f5c768;
+		font-style: normal;
+	}
+
 	.screenshot-failure {
 		display: grid;
 		gap: 5px;
@@ -1313,6 +1427,15 @@
 		border-color: rgba(255, 176, 64, 0.34);
 		background: rgba(255, 176, 64, 0.1);
 		color: #ffc26d;
+		line-height: 1.16;
+		white-space: normal;
+	}
+
+	.actions .restore {
+		min-height: 42px;
+		border-color: rgba(94, 139, 255, 0.34);
+		background: rgba(57, 103, 214, 0.12);
+		color: #9bbdff;
 		line-height: 1.16;
 		white-space: normal;
 	}
@@ -1477,6 +1600,10 @@
 		.badges {
 			flex-wrap: wrap;
 			justify-content: start;
+		}
+
+		.replacement-comparison strong {
+			max-width: 100%;
 		}
 
 		.actions {
