@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ActivityIndicator from '$lib/components/ActivityIndicator.svelte';
+  import { addressFromQuery, type ActivityKind, type ActivityPhase } from '$lib/activity';
   import { onMount, tick } from "svelte";
   import {
     getApiEnvironmentConfig,
@@ -34,6 +36,63 @@
   let searchInput: HTMLInputElement | undefined = $state();
   let url = $state("");
   let submitting = $state(false);
+  let activityKind = $state<ActivityKind>('catalog');
+  let activityPhase = $state<ActivityPhase>('connecting');
+  let activitySequence = $state(0);
+  let activityPrevious = $state<number | undefined>();
+  let healthPromise: Promise<void> | null = null;
+  let lastReadyAt = 0;
+  let activityStartedAt = 0;
+  let progressPanel: HTMLDivElement | undefined = $state();
+  let suggestPanel: HTMLDetailsElement | undefined = $state();
+  const busy = $derived(loading || submitting || detailLoading);
+  const queryAddress = $derived(addressFromQuery(submittedQuery));
+
+  function beginActivity(kind: ActivityKind) {
+    activityKind = kind;
+    activitySequence += 1;
+    activityStartedAt = Date.now();
+    activityPhase = Date.now() - lastReadyAt < 60000 ? 'working' : 'connecting';
+    try { activityPrevious = Number(localStorage.getItem(`veridict:duration:${kind}`)) || undefined; } catch { activityPrevious = undefined; }
+  }
+
+  function endActivity(kind: ActivityKind) {
+    const seconds = (Date.now() - activityStartedAt) / 1000;
+    try { localStorage.setItem(`veridict:duration:${kind}`, String(seconds)); } catch { /* Optional timing history. */ }
+  }
+
+  async function ensureBackend() {
+    if (Date.now() - lastReadyAt < 60000) { activityPhase = 'working'; return; }
+    if (!healthPromise) {
+      healthPromise = (async () => {
+        try {
+          const response = await fetch(`${apiBase}/health`, { signal: AbortSignal.timeout(95000), cache: 'no-store' });
+          if (!response.ok && response.status !== 404) throw new Error('Servern svarar inte just nu.');
+          // A 404 allows a frontend-first deployment to keep working against the older API.
+          lastReadyAt = Date.now();
+        } finally { healthPromise = null; }
+      })();
+    }
+    await healthPromise;
+    activityPhase = 'working';
+  }
+
+  async function revealProgress() {
+    await tick();
+    progressPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function contentMessage(result: AnalysisResult) {
+    if (result.contentState === 'VerificationBlocked') return 'Webbplatsen visar en verifierings- eller säkerhetssida. Vi kan inte bedöma innehållet bakom den.';
+    if (result.contentState === 'InsufficientContent') return 'Vi kunde inte läsa tillräckligt av sidans innehåll. Det kan bero på JavaScript-laddning, inloggning eller ett tillfälligt hämtningsfel. Ingen kvalitetspoäng har satts.';
+    return result.contentStateReason || 'Underlaget räcker inte för en tillförlitlig bedömning.';
+  }
+
+  async function analyzeSearchAddress() {
+    url = queryAddress;
+    if (suggestPanel) suggestPanel.open = true;
+    await submitSite();
+  }
   let submissionError = $state("");
   let submissionResult = $state<AnalysisResult | null>(null);
   const items = $derived(searched ? results : featured);
@@ -69,8 +128,10 @@
   async function loadCatalog() {
     const current = ++requestId;
     loading = true;
+    beginActivity('catalog');
     error = "";
     try {
+      await ensureBackend();
       const [top, cats] = await Promise.all([
         fetch(`${apiBase}/catalog/top?limit=6`),
         fetch(`${apiBase}/catalog/categories`),
@@ -84,18 +145,33 @@
       if (current === requestId)
         error = "Katalogen kunde inte laddas. Försök igen om en stund.";
     } finally {
-      if (current === requestId) loading = false;
+      if (current === requestId) { loading = false; endActivity('catalog'); }
     }
   }
 
   async function search() {
+    if (busy) return;
+    const directAddress = addressFromQuery(query);
+    if (directAddress) {
+      ++requestId;
+      selected = null;
+      results = [];
+      searched = false;
+      error = '';
+      url = directAddress;
+      await submitSite(true);
+      return;
+    }
     const current = ++requestId;
     loading = true;
     error = "";
+    beginActivity('search');
+    revealProgress();
     const text = query.trim();
     searched = true;
     submittedQuery = text;
     try {
+      await ensureBackend();
       const params = new URLSearchParams({ q: text, category, sort });
       const response = await fetch(`${apiBase}/catalog/search?${params}`);
       if (!response.ok) throw new Error();
@@ -107,7 +183,7 @@
       if (current === requestId)
         error = "Sökningen kunde inte genomföras. Försök igen.";
     } finally {
-      if (current === requestId) loading = false;
+      if (current === requestId) { loading = false; endActivity('search'); }
     }
   }
 
@@ -127,9 +203,12 @@
     selected = null;
     detailError = "";
     detailLoading = true;
+    beginActivity('detail');
     await tick();
     detailHeading?.focus();
+    revealProgress();
     try {
+      await ensureBackend();
       const response = await fetch(
         `${apiBase}/catalog/${encodeURIComponent(item.id)}`,
       );
@@ -141,7 +220,7 @@
         detailError =
           "Bedömningen kunde inte hämtas. Försök att öppna den igen.";
     } finally {
-      if (current === detailRequestId) detailLoading = false;
+      if (current === detailRequestId) { detailLoading = false; endActivity('detail'); }
     }
   }
 
@@ -153,7 +232,7 @@
     searchInput?.focus();
   }
 
-  async function submitSite() {
+  async function submitSite(retryUnavailable = false) {
     if (submitting || !url.trim()) return;
     const formatted = /^https?:\/\//i.test(url.trim())
       ? url.trim()
@@ -164,21 +243,27 @@
       return;
     }
     submitting = true;
+    beginActivity('analysis');
+    revealProgress();
     submissionError = "";
     submissionResult = null;
     try {
+      await ensureBackend();
       const response = await fetch(`${apiBase}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: formatted }),
+        body: JSON.stringify({ url: formatted, retryUnavailable }),
+        signal: AbortSignal.timeout(180000),
       });
       if (!response.ok) throw new Error();
       submissionResult = await response.json();
+      await showSubmission();
     } catch {
       submissionError =
         "Sidan kunde inte analyseras just nu. Kontrollera adressen och försök igen.";
     } finally {
       submitting = false;
+      endActivity('analysis');
     }
   }
 
@@ -189,6 +274,7 @@
     detailLoading = false;
     await tick();
     detailHeading?.focus();
+    detailHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   onMount(() => {
@@ -226,9 +312,6 @@
 
 <main id="main">
   <section class="hero" id="search" aria-labelledby="hero-heading">
-    <span class="eyebrow"
-      ><span aria-hidden="true">✳</span> Mindre brus. Mer värde.</span
-    >
     <h1 id="hero-heading">
       Hitta det som faktiskt<br class="desktop-break" /> är <em>användbart.</em>
     </h1>
@@ -253,9 +336,9 @@
           bind:value={query}
           type="search"
           maxlength="200"
-          placeholder="Vad vill du hitta? Till exempel CSS eller tarot"
-        /><button class="primary" type="submit" disabled={loading}
-          >Sök <span aria-hidden="true">→</span></button
+          placeholder="Sök ämne eller analysera en webbadress"
+        /><button class="primary" type="submit" disabled={busy}
+          >{loading ? 'Söker…' : 'Sök'} <span aria-hidden="true">→</span></button
         >
       </div>
       <div class="filters">
@@ -271,14 +354,11 @@
               value="top">Högst kvalitetspoäng</option
             ><option value="newest">Senast granskade</option></select
           ></label
-        ><span class="filter-note">Söker i den granskade katalogen</span>
+        ><span class="filter-note">Ämne → katalog · webbadress → analys</span>
       </div>
     </form>
-    <div class="hero-notes">
-      <span><i aria-hidden="true">✓</i> Innehåll före popularitet</span><span
-        ><i aria-hidden="true">✓</i> Bedömningar du kan läsa</span
-      ><span><i aria-hidden="true">✓</i> Granskning före publicering</span>
-    </div>
+    {#if submissionError}<p class="error" role="alert">{submissionError}</p>{/if}
+    {#if busy}<div class="active-progress" bind:this={progressPanel}>{#key activitySequence}<ActivityIndicator kind={activityKind} phase={activityPhase} previous={activityPrevious} />{/key}</div>{/if}
   </section>
 
   {#if detailLoading || selected || detailError}
@@ -309,7 +389,7 @@
               selected.lastAnalyzedAt || selected.createdAt,
             )}</span
           >{#if selected.status !== "Approved" && !selected.alreadyApproved}<span class="pending"
-              >Inväntar granskning · inte publicerad</span
+              >Ditt resultat · inväntar granskning för katalogen</span
             >{:else}<span class="reviewed">Granskad för publicering</span>{/if}
         </div>
         {#if selected.intent}<p class="intent">
@@ -354,13 +434,11 @@
           </div>
         {:else}<p class="unscored">
             <strong>Ingen kvalitetspoäng har satts.</strong>
-            {selected.contentStateReason ||
-              "Underlaget räcker inte för en tillförlitlig bedömning."}
+            {contentMessage(selected)}
           </p>{/if}
         <div class="assessment-footer">
           <p>
-            AI-genererat underlag, granskat före publicering. Bedömningen gäller
-            den analyserade sidan och kan behöva uppdateras.
+            AI-genererad bedömning av den analyserade sidan. Nya resultat visas direkt för dig och granskas innan de delas i katalogen.
           </p>
           {#if publicUrl(selected.url)}<a
               class="primary"
@@ -442,7 +520,10 @@
             ? "Prova ett annat ämne eller en bredare sökning. Katalogen innehåller bara sidor som har granskats för publicering."
             : "Du kan föreslå en sida som du tycker borde finnas här."}
         </p>
-        <a href="#suggest">Föreslå en sida →</a>
+        {#if searched && queryAddress}
+          <p>Adressen finns inte i den granskade katalogen ännu. En ny analys visas först här efter granskning.</p>
+          <button class="primary" onclick={analyzeSearchAddress} disabled={busy}>Analysera {siteHost(queryAddress)}</button>
+        {:else}<a href="#suggest">Föreslå en sida →</a>{/if}
       </div>{/if}
   </section>
 
@@ -451,8 +532,7 @@
       <span class="eyebrow">En poäng ska gå att förstå</span>
       <h2 id="about-heading">Vad gör en sida<br /> värd din tid?</h2>
       <p>
-        Veridict använder AI för att analysera innehåll. Ett granskningssteg
-        avgör sedan om bedömningen ska publiceras.
+        Veridict använder AI för att analysera innehåll. Du får resultatet direkt. Granskningen avgör sedan om det ska delas i katalogen.
       </p>
       <p>
         Poängen är en vägledning, ingen garanti. Läs bedömningen för att se
@@ -489,11 +569,10 @@
       <span class="eyebrow">Hjälp katalogen att växa</span>
       <h2>Saknar du en sida?</h2>
       <p>
-        Föreslå en webbadress. Vi analyserar innehållet och låter bedömningen
-        invänta granskning innan publicering.
+        Skriv en webbadress och få din bedömning direkt. Granskningen avgör sedan om den ska delas i katalogen för andra.
       </p>
     </div>
-    <details>
+    <details bind:this={suggestPanel} open>
       <summary>Föreslå en sida <span aria-hidden="true">＋</span></summary>
       <form
         onsubmit={(event) => {
@@ -513,7 +592,7 @@
         /><button
           class="primary"
           type="submit"
-          disabled={submitting || !url.trim()}
+          disabled={busy || !url.trim()}
           >{submitting ? "Analyserar sidan…" : "Skicka för analys"}</button
         >
         <p class="form-note">
@@ -528,18 +607,22 @@
           role="status"
         >
           <strong
-            >{submissionResult.alreadyApproved
+            >{submissionResult.contentState === 'VerificationBlocked' ? 'Webbplatsen kunde inte läsas bakom verifieringen.' : submissionResult.contentState === 'InsufficientContent' ? 'Vi kunde inte läsa tillräckligt av sidan.' : submissionResult.alreadyApproved
               ? "Sidan finns redan i katalogen."
               : submissionResult.alreadyPending
-                ? "Sidan väntar redan på granskning."
-                : "Förslaget är mottaget och inväntar granskning."}</strong
+                ? "Din sparade bedömning visas här och väntar på granskning för katalogen."
+                : "Din bedömning är klar. Den inväntar granskning innan den delas i katalogen."}</strong
           >
           <p>
             {submissionResult.contentState &&
             submissionResult.contentState !== "Ready"
-              ? "Det gick inte att få tillräckligt innehåll för att sätta en kvalitetspoäng."
+              ? contentMessage(submissionResult)
               : "Du kan läsa den sparade bedömningen här."}
           </p>
+          {#if submissionResult.contentState && submissionResult.contentState !== 'Ready'}
+            <p>Du kan försöka läsa sidan igen efter två minuter. Samma försök uppdateras utan att skapa dubbletter.</p>
+            <button class="secondary" disabled={busy} onclick={() => submitSite(true)}>Försök läsa sidan igen</button>
+          {/if}
           <button class="text-button" onclick={showSubmission}
             >Visa underlaget →</button
           >
@@ -562,8 +645,8 @@
   :global(html) {
     scroll-behavior: smooth;
     scroll-padding-top: 24px;
-    background: #f8f9f5;
-    color-scheme: light;
+    background: #121b19;
+    color-scheme: dark;
     font-family:
       Inter,
       ui-sans-serif,
@@ -572,7 +655,7 @@
       BlinkMacSystemFont,
       "Segoe UI",
       sans-serif;
-    color: #243e32;
+    color: #e3ebe6;
   }
   :global(body) {
     margin: 0;
@@ -590,11 +673,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   :global(:focus-visible) {
-    outline: 3px solid #4b8b6e;
+    outline: 3px solid #9ac5ac;
     outline-offset: 4px;
   }
   :global(a) {
-    color: #25634b;
+    color: #a8ceb8;
   }
   :global(button:disabled) {
     opacity: 0.6;
@@ -616,7 +699,7 @@
     top: 10px;
     left: 10px;
     padding: 12px;
-    background: white;
+    background: #18251f;
     z-index: 5;
     transform: translateY(-150%);
   }
@@ -631,7 +714,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    border-bottom: 1px solid #e1e7df;
+    border-bottom: 1px solid #30413a;
   }
   .brand {
     display: inline-flex;
@@ -640,7 +723,7 @@
     font-size: 1.65rem;
     letter-spacing: -1px;
     text-decoration: none;
-    color: #244d3b;
+    color: #c4ddcd;
   }
   .brand-mark {
     display: grid;
@@ -664,15 +747,15 @@
   }
   .site-header nav a {
     text-decoration: none;
-    color: #526357;
+    color: #b7c8be;
     font-size: 0.82rem;
     font-weight: 550;
   }
   .site-header nav a:hover {
-    color: #16432c;
+    color: #e9f4ed;
   }
   .site-header nav .suggest-link {
-    border: 1px solid #ccd8cb;
+    border: 1px solid #435b50;
     padding: 10px 14px;
     border-radius: 7px;
   }
@@ -685,33 +768,18 @@
     max-width: 850px;
     margin: 0 auto;
     text-align: center;
-    padding: 73px 0 54px;
+    padding: 48px 0 40px;
   }
   .eyebrow {
     font-size: 0.7rem;
     letter-spacing: 0.13em;
     text-transform: uppercase;
     font-weight: 700;
-    color: #61705e;
-  }
-  .hero > .eyebrow {
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-    border: 1px solid #d9e4d5;
-    background: #eef3e9;
-    border-radius: 20px;
-    padding: 7px 13px;
-    color: #3e6b4d;
-    letter-spacing: 0.06em;
-    font-size: 0.68rem;
-  }
-  .hero > .eyebrow span {
-    font-size: 1rem;
+    color: #b1c3b5;
   }
   h1 {
     font-weight: 550;
-    font-size: clamp(2.6rem, 5.2vw, 4.35rem);
+    font-size: clamp(2.2rem, 4.5vw, 3.7rem);
     letter-spacing: -0.055em;
     line-height: 1.1;
     margin: 24px 0 20px;
@@ -719,17 +787,17 @@
   h1 em {
     font-family: Georgia, serif;
     font-weight: 400;
-    color: #427b58;
+    color: #9ec5ad;
   }
   .intro {
-    color: #68766b;
+    color: #b4c6b9;
     font-size: 0.99rem;
     line-height: 1.8;
     margin: 0 0 32px;
   }
   .search-form {
-    background: #fff;
-    border: 1px solid #cfdbcf;
+    background: #1b2822;
+    border: 1px solid #3c5146;
     border-radius: 14px;
     box-shadow: 0 7px 24px #25452e06;
     text-align: left;
@@ -742,7 +810,7 @@
     gap: 12px;
   }
   .search-icon {
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 1.8rem;
   }
   .search-main input {
@@ -751,12 +819,12 @@
     flex: 1;
     min-width: 0;
     padding: 14px 0;
-    color: #293c30;
+    color: #e1ebe4;
     font-size: 0.9rem;
     outline-offset: 0;
   }
   .search-main input::placeholder {
-    color: #61705e;
+    color: #b1c3b5;
   }
   .primary {
     display: inline-flex;
@@ -780,8 +848,8 @@
   }
   .filters {
     padding: 12px 18px;
-    background: #fafbf8;
-    border-top: 1px solid #e7ece3;
+    background: #1c2924;
+    border-top: 1px solid #33463b;
     display: flex;
     gap: 18px;
     align-items: center;
@@ -792,10 +860,10 @@
     gap: 7px;
     align-items: center;
     font-size: 0.69rem;
-    color: #61745f;
+    color: #b1c3b5;
   }
   .filters select {
-    color: #425541;
+    color: #ceded1;
     background: transparent;
     border: 0;
     padding: 5px 3px;
@@ -804,22 +872,8 @@
   }
   .filter-note {
     margin-left: auto;
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.65rem;
-  }
-  .hero-notes {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 23px;
-    color: #61705e;
-    font-size: 0.68rem;
-    margin-top: 20px;
-  }
-  .hero-notes i {
-    font-style: normal;
-    margin-right: 5px;
-    color: #56825f;
   }
   h2 {
     font-size: 1.65rem;
@@ -839,14 +893,14 @@
   }
   .catalog-caption {
     font-size: 0.73rem;
-    color: #61705e;
+    color: #b1c3b5;
     align-self: end;
   }
   .result-status {
     min-height: 32px;
     padding: 8px 0;
     font-size: 0.75rem;
-    color: #647461;
+    color: #b1c3b5;
   }
   .card-grid {
     display: grid;
@@ -856,7 +910,7 @@
   .text-button {
     border: 0;
     background: none;
-    color: #32634a;
+    color: #afd2bb;
     font-size: 0.77rem;
     padding: 6px 0;
     cursor: pointer;
@@ -866,18 +920,18 @@
     text-decoration: underline;
   }
   .secondary {
-    border: 1px solid #b7c9b8;
+    border: 1px solid #435e50;
     border-radius: 7px;
     padding: 11px 18px;
-    background: #fff;
-    color: #2d5c41;
+    background: #1b2822;
+    color: #c1deca;
     font-size: 0.82rem;
     cursor: pointer;
   }
   .empty {
     text-align: center;
-    background: #fff;
-    border: 1px dashed #cdd9cb;
+    background: #1b2822;
+    border: 1px dashed #435c4d;
     border-radius: 14px;
     padding: 45px 25px;
   }
@@ -888,7 +942,7 @@
     font-weight: 550;
   }
   .empty p {
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.88rem;
     max-width: 500px;
     margin: 15px auto;
@@ -906,24 +960,24 @@
   }
   .load-more span {
     font-size: 0.7rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .skeleton {
-    border: 1px solid #e1e8dc;
+    border: 1px solid #344a3d;
     border-radius: 18px;
     overflow: hidden;
-    background: #fff;
+    background: #1b2822;
     min-height: 350px;
   }
   .skeleton > span {
     display: block;
     aspect-ratio: 8/5;
-    background: #e9eee4;
+    background: #26392e;
   }
   .skeleton i {
     display: block;
     height: 12px;
-    background: #edf1e8;
+    background: #304536;
     margin: 22px;
     border-radius: 4px;
   }
@@ -931,8 +985,8 @@
     width: 50%;
   }
   .assessment {
-    border: 1px solid #cadbc9;
-    background: #fff;
+    border: 1px solid #3b5544;
+    background: #1b2822;
     border-radius: 18px;
     margin: 0 0 36px;
     padding: 30px;
@@ -948,19 +1002,19 @@
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.72rem;
     margin: 14px 0;
   }
   .reviewed {
-    color: #326345;
+    color: #a8cdb5;
   }
   .pending {
-    color: #85602d;
+    color: #dfc794;
   }
   .intent {
     font-size: 0.82rem;
-    color: #66745f;
+    color: #b6c9ba;
     line-height: 1.6;
   }
   .assessment-summary {
@@ -971,7 +1025,7 @@
   }
   .assessment-summary > p {
     margin: 0;
-    color: #52644e;
+    color: #c3d4c6;
     line-height: 1.8;
     font-size: 0.95rem;
   }
@@ -979,25 +1033,25 @@
     display: flex;
     flex-direction: column;
     min-width: 110px;
-    border-right: 1px solid #e0e9dc;
+    border-right: 1px solid #3a5140;
     padding-right: 25px;
   }
   .total strong {
     font-size: 3.2rem;
     letter-spacing: -0.07em;
     font-weight: 550;
-    color: #326b4b;
+    color: #b8d9c2;
   }
   .total span {
     font-size: 0.7rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .metrics {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 25px;
     padding: 24px 0;
-    border-block: 1px solid #e5ecdf;
+    border-block: 1px solid #344a3c;
   }
   .metric-top {
     display: flex;
@@ -1007,15 +1061,15 @@
   }
   .metric-top small {
     font-size: 0.65rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .metrics small {
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.67rem;
   }
   .track {
     height: 5px;
-    background: #eaf0e4;
+    background: #304638;
     border-radius: 4px;
     overflow: hidden;
     margin: 10px 0;
@@ -1023,10 +1077,10 @@
   .track span {
     display: block;
     height: 100%;
-    background: #65936a;
+    background: #92bc9b;
   }
   .track span.noise {
-    background: #b79056;
+    background: #cfb47c;
   }
   .assessment-columns {
     display: grid;
@@ -1043,7 +1097,7 @@
   }
   .assessment-columns li,
   .assessment-columns p {
-    color: #64715c;
+    color: #b5c9b9;
     font-size: 0.83rem;
     line-height: 1.8;
     margin-bottom: 9px;
@@ -1052,24 +1106,24 @@
     display: flex;
     gap: 25px;
     align-items: center;
-    border-top: 1px solid #e5ecdf;
+    border-top: 1px solid #344a3c;
     padding-top: 20px;
   }
   .assessment-footer p {
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.72rem;
     line-height: 1.7;
     margin: 0;
     flex: 1;
   }
   .unscored {
-    background: #f8f3e8;
+    background: #352f22;
     padding: 20px;
-    color: #775f36;
+    color: #e2cfa5;
     line-height: 1.7;
   }
   .error {
-    color: #9b3434;
+    color: #f0acac;
     font-size: 0.85rem;
     line-height: 1.7;
   }
@@ -1077,7 +1131,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 90px;
-    border-top: 1px solid #dce5d6;
+    border-top: 1px solid #34493a;
     padding: 53px 0;
   }
   .about h2 {
@@ -1086,7 +1140,7 @@
   .about > div > p,
   .suggest p {
     font-size: 0.85rem;
-    color: #697760;
+    color: #b4c7b6;
     line-height: 1.8;
     max-width: 430px;
   }
@@ -1100,7 +1154,7 @@
     gap: 18px;
   }
   .principles > div > span {
-    color: #61705e;
+    color: #b1c3b5;
     font-size: 0.72rem;
     padding-top: 4px;
   }
@@ -1112,7 +1166,7 @@
   .principles p {
     margin: 0;
     font-size: 0.83rem;
-    color: #61705e;
+    color: #b1c3b5;
     line-height: 1.65;
   }
   .suggest {
@@ -1120,8 +1174,8 @@
     grid-template-columns: 1.2fr 1fr;
     align-items: start;
     gap: 65px;
-    border: 1px solid #dce6d3;
-    background: #eff3e9;
+    border: 1px solid #354d3d;
+    background: #1b2a22;
     border-radius: 16px;
     padding: 30px 35px;
     margin: 0 0 55px;
@@ -1133,8 +1187,8 @@
     margin-bottom: 0;
   }
   .suggest details {
-    background: #ffffffa8;
-    border: 1px solid #d6e1ce;
+    background: #17231d;
+    border: 1px solid #3c5442;
     border-radius: 9px;
     padding: 0 18px;
     margin-top: 6px;
@@ -1142,7 +1196,7 @@
   .suggest summary {
     cursor: pointer;
     padding: 16px 0;
-    color: #326043;
+    color: #c2dfca;
     font-size: 0.85rem;
     font-weight: 600;
   }
@@ -1160,8 +1214,8 @@
   }
   .suggest input {
     width: 100%;
-    border: 1px solid #b9cbb0;
-    background: white;
+    border: 1px solid #4d6b55;
+    background: #18251f;
     border-radius: 6px;
     padding: 12px;
     font-size: 0.85rem;
@@ -1182,7 +1236,7 @@
   .site-footer {
     max-width: 1144px;
     margin: auto;
-    border-top: 1px solid #dde5d7;
+    border-top: 1px solid #344a3b;
     padding: 25px 0 35px;
     display: flex;
     align-items: center;
@@ -1193,12 +1247,12 @@
   }
   .site-footer p {
     font-size: 0.72rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .site-footer > a:last-child {
     font-size: 0.7rem;
     margin-left: auto;
-    color: #61705e;
+    color: #b1c3b5;
     text-decoration: none;
   }
   @media (max-width: 900px) {
@@ -1308,11 +1362,6 @@
       font-size: 0.7rem;
       padding: 6px 0;
     }
-    .hero-notes {
-      gap: 10px;
-      font-size: 0.58rem;
-      line-height: 1.7;
-    }
     .card-grid {
       grid-template-columns: 1fr;
     }
@@ -1397,5 +1446,28 @@
     :global(html) {
       scroll-behavior: auto;
     }
+  }
+  .active-progress { margin-top: 16px; }
+  @media (max-width: 380px) { .filters { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) {
+    .site-header { padding: 16px; align-items: center; }
+    .site-header nav { max-width: none; gap: 14px; }
+    .site-header nav a:first-child { display: none; }
+    main { padding: 0 16px; }
+    .hero { padding: 28px 0 24px; text-align: left; }
+    h1 { font-size: clamp(2rem, 9vw, 2.6rem); margin: 10px 0 14px; }
+    .desktop-break { display: none; }
+    .intro { font-size: .9rem; line-height: 1.6; margin-bottom: 22px; }
+    .search-main { display: grid; grid-template-columns: 1fr; padding: 10px; gap: 8px; }
+    .search-main input { font-size: 1rem; padding: 13px 10px; min-height: 48px; width: 100%; }
+    .search-main > button { min-height: 48px; width: 100%; font-size: .95rem; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
+    .filters label { min-width: 0; font-size: .75rem; }
+    .filters select { max-width: 100%; width: 100%; font-size: .85rem; min-height: 38px; }
+    .suggest { padding: 20px; }
+    .assessment-summary { flex-direction: column; }
+    .total { border-right: 0; }
+    .metrics { grid-template-columns: 1fr; }
+    .assessment { padding: 18px; }
   }
 </style>

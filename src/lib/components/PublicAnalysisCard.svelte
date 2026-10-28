@@ -71,8 +71,8 @@
 
 <style>
   .card {
-    background: #fff;
-    border: 1px solid #dce5df;
+    background: #1b2822;
+    border: 1px solid #354c3f;
     border-radius: 18px;
     overflow: hidden;
     display: flex;
@@ -83,15 +83,15 @@
       box-shadow 0.2s;
   }
   .card:hover {
-    border-color: #a5bdb0;
+    border-color: #678e74;
     box-shadow: 0 9px 26px #243c3010;
   }
   .preview {
     aspect-ratio: 8/5;
-    background: #edf1eb;
+    background: #23372b;
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid #e6ece6;
+    border-bottom: 1px solid #344b3d;
   }
   img {
     display: block;
@@ -104,13 +104,13 @@
     position: absolute;
     left: 14px;
     bottom: 12px;
-    background: #fffffff2;
-    border: 1px solid #dce5df;
+    background: #18271ff2;
+    border: 1px solid #354c3f;
     border-radius: 6px;
     padding: 5px 9px;
     font-size: 0.72rem;
     font-weight: 650;
-    color: #354b40;
+    color: #cbded0;
   }
   .fallback {
     height: 100%;
@@ -119,12 +119,12 @@
     justify-content: center;
     flex-direction: column;
     gap: 10px;
-    color: #61746a;
+    color: #b7cabd;
   }
   .fallback span {
     font-family: Georgia, serif;
     font-size: 3rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .fallback small {
     font-size: 0.8rem;
@@ -146,31 +146,31 @@
     font-size: 1.08rem;
     line-height: 1.45;
     overflow-wrap: anywhere;
-    color: #203d31;
+    color: #e2eee6;
   }
   .score {
     display: flex;
     align-items: baseline;
     gap: 2px;
     white-space: nowrap;
-    color: #225e49;
+    color: #afcdb9;
   }
   .score strong {
     font-size: 1.3rem;
   }
   .score span {
     font-size: 0.72rem;
-    color: #61705e;
+    color: #b1c3b5;
   }
   .host {
     font-size: 0.76rem;
-    color: #61705e;
+    color: #b1c3b5;
     margin-top: 5px;
   }
   p {
     font-size: 0.88rem;
     line-height: 1.65;
-    color: #53645a;
+    color: #bccfc2;
     margin: 16px 0;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -188,8 +188,8 @@
   }
   .topics li {
     font-size: 0.68rem;
-    color: #52675a;
-    background: #f1f4ee;
+    color: #bdd3c4;
+    background: #283e30;
     border-radius: 5px;
     padding: 4px 7px;
   }
@@ -201,20 +201,20 @@
     flex-wrap: wrap;
     margin-top: auto;
     padding-top: 16px;
-    border-top: 1px solid #edf0eb;
+    border-top: 1px solid #344b3d;
   }
   .actions button {
     border: 0;
     background: none;
     padding: 4px 0;
-    color: #24624b;
+    color: #b6dbc4;
     font: inherit;
     font-size: 0.82rem;
     font-weight: 700;
     cursor: pointer;
   }
   .actions a {
-    color: #64746b;
+    color: #bacfbe;
     font-size: 0.76rem;
     text-decoration: none;
   }
@@ -222,7 +222,7 @@
     text-decoration: underline;
   }
   .actions button:hover {
-    color: #123f2c;
+    color: #e1f2e6;
   }
   .actions :focus-visible {
     outline: 3px solid #a5c9b7;

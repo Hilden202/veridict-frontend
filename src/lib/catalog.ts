@@ -30,6 +30,7 @@ export type AnalysisResult = Partial<CatalogItem> & {
   lastAnalyzedAt?: string;
   alreadyApproved?: boolean;
   alreadyPending?: boolean;
+  retryAfterSeconds?: number;
 };
 
 export function siteHost(url?: string) {
