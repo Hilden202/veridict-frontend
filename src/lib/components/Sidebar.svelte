@@ -5,9 +5,6 @@
 	const navItems = [
 		{ label: "Search", icon: "⌕", href: "#search", active: true },
 		{ label: "Analyze", icon: "⌂", href: "#analyze" },
-		{ label: "History", icon: "◷", href: "#" },
-		{ label: "My Sites", icon: "▣", href: "#" },
-		{ label: "Settings", icon: "⚙", href: "#" },
 	];
 
 	let showModerationShortcut = $state(false);
@@ -41,18 +38,6 @@
 
 	<div class="sidebar-spacer"></div>
 
-	<section class="upgrade">
-		<span class="spark">✣</span>
-		<h2>Unlock more power</h2>
-		<ul>
-			<li>Intent-based analysis</li>
-			<li>Track improvements</li>
-			<li>Priority updates</li>
-			<li>And more...</li>
-		</ul>
-		<span class="upgrade-cta">Upgrade now</span>
-	</section>
-
 	<a
 		class="hilden"
 		href="https://hildenmedia.se"
@@ -72,10 +57,6 @@
 		<span>Hilden Media</span>
 	</a>
 
-	<div class="domain">
-		<span>veridict.app</span>
-		<div class="theme-toggle" aria-hidden="true"><i></i></div>
-	</div>
 </aside>
 
 <style>
@@ -216,64 +197,6 @@
 		flex: 1;
 	}
 
-	.upgrade {
-		margin: 24px 26px;
-		padding: 24px 18px 18px;
-		border: 1px solid rgba(111, 129, 255, 0.26);
-		border-radius: 13px;
-		background: radial-gradient(
-				circle at 85% 8%,
-				rgba(155, 91, 255, 0.54),
-				transparent 42%
-			),
-			linear-gradient(
-				150deg,
-				rgba(16, 67, 112, 0.84),
-				rgba(51, 37, 126, 0.88)
-			);
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-	}
-
-	.spark {
-		color: #a783ff;
-		font-size: 1.55rem;
-	}
-
-	.upgrade h2 {
-		margin: 18px 0 16px;
-		color: #ffffff;
-		font-size: 1.02rem;
-	}
-
-	.upgrade ul {
-		display: grid;
-		gap: 11px;
-		margin: 0 0 22px;
-		padding: 0;
-		color: #e7efff;
-		font-size: 0.83rem;
-		list-style: none;
-	}
-
-	.upgrade li::before {
-		content: "✓";
-		margin-right: 10px;
-		color: #6cffb0;
-		font-weight: 900;
-	}
-
-	.upgrade-cta {
-		display: grid;
-		min-height: 48px;
-		place-items: center;
-		border-radius: 9px;
-		background: linear-gradient(100deg, #4465ff, #a64cff 55%, #20a8ff);
-		color: #ffffff;
-		font-weight: 800;
-		text-decoration: none;
-		box-shadow: 0 14px 30px rgba(79, 99, 255, 0.3);
-	}
-
 	.hilden {
 		display: flex;
 		align-items: center;
@@ -307,52 +230,6 @@
 		stroke-linecap: round;
 	}
 
-	.domain {
-		display: grid;
-		justify-items: center;
-		gap: 18px;
-		padding: 27px 0 28px;
-		border-top: 1px solid rgba(137, 158, 191, 0.16);
-		color: #9aa9bd;
-	}
-
-	.theme-toggle {
-		position: relative;
-		width: 60px;
-		height: 24px;
-		border-radius: 999px;
-		background: rgba(115, 132, 170, 0.14);
-	}
-
-	.theme-toggle::before,
-	.theme-toggle::after {
-		position: absolute;
-		top: 4px;
-		color: #8494ac;
-		font-size: 13px;
-	}
-
-	.theme-toggle::before {
-		content: "☼";
-		left: -20px;
-	}
-
-	.theme-toggle::after {
-		content: "◐";
-		right: -20px;
-	}
-
-	.theme-toggle i {
-		position: absolute;
-		top: 3px;
-		right: 4px;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: linear-gradient(135deg, #825aff, #b066ff);
-		box-shadow: 0 0 14px rgba(143, 95, 255, 0.8);
-	}
-
 	@media (max-width: 980px) {
 		.sidebar {
 			position: static;
@@ -368,12 +245,12 @@
 		}
 
 		nav {
-			grid-template-columns: repeat(5, minmax(0, 1fr));
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 			padding-bottom: 22px;
 		}
 
 		nav.has-dev-shortcut {
-			grid-template-columns: repeat(6, minmax(0, 1fr));
+			grid-template-columns: repeat(3, minmax(0, 1fr));
 		}
 
 		nav a {
@@ -393,9 +270,7 @@
 			font-size: 0.56rem;
 		}
 
-		nav span,
-		.upgrade,
-		.domain {
+		nav span {
 			display: none;
 		}
 	}
@@ -412,3 +287,4 @@
 		}
 	}
 </style>
+

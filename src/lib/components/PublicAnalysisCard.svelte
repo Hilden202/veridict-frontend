@@ -1,440 +1,232 @@
 <script lang="ts">
-	type CatalogItem = {
-		id?: string;
-		title?: string;
-		url?: string;
-		category?: string;
-		score?: number;
-		summary?: string;
-		topics?: string[];
-		screenshotPath?: string;
-		screenshotThumbnailPath?: string;
-		screenshotUrl?: string;
-		thumbnailUrl?: string;
-		imageUrl?: string;
-	};
-
-	type Props = {
-		item: CatalogItem;
-		apiBase?: string;
-		publicAssetBase?: string;
-		compact?: boolean;
-	};
-
-	let { item, apiBase = "", publicAssetBase = "", compact = false }: Props = $props();
-
-	function formatScore(score?: number) {
-		return typeof score === "number" ? score.toFixed(1) : "--";
-	}
-
-	function imageSource(path?: string) {
-		if (!path) return "";
-		if (/^(https?:|data:|blob:)/i.test(path)) return path;
-		if (path.startsWith("/screenshots/")) return `${publicAssetBase}${path}`;
-		if (path.startsWith("/storage/")) return `${apiBase}${path}`;
-		if (path.startsWith("screenshots/")) return `${publicAssetBase}/${path}`;
-		return `${apiBase}/${path}`;
-	}
-
-	function imageReference(item: CatalogItem) {
-		return (
-			item.imageUrl ||
-			item.thumbnailUrl ||
-			item.screenshotUrl ||
-			item.screenshotThumbnailPath ||
-			item.screenshotPath ||
-			""
-		);
-	}
-
-	function displayHost(url?: string) {
-		if (!url) return "";
-
-		try {
-			return new URL(url).hostname.replace(/^www\./, "");
-		} catch {
-			return url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
-		}
-	}
+  import {
+    imageSource,
+    publicUrl,
+    siteHost,
+    type CatalogItem,
+  } from "$lib/catalog";
+  type Props = {
+    item: CatalogItem;
+    apiBase?: string;
+    publicAssetBase?: string;
+    compact?: boolean;
+    oninspect?: (item: CatalogItem) => void;
+  };
+  let { item, apiBase = "", publicAssetBase = "", oninspect }: Props = $props();
+  const src = $derived(imageSource(item, apiBase, publicAssetBase));
+  let failedSource = $state("");
 </script>
 
-<a class="catalog-card" class:compact href={item.url} target="_blank" rel="noreferrer">
-	<div class="shot">
-		{#if imageSource(imageReference(item))}
-			<img src={imageSource(imageReference(item))} alt={item.title || item.url || "Approved website"} />
-		{:else}
-			<div class="shot-placeholder">
-				<span>VERIDICT</span>
-				<strong>No preview yet</strong>
-			</div>
-		{/if}
-
-		<div class="score-ring" aria-label={`Score ${formatScore(item.score)} out of 10`}>
-			<strong>{formatScore(item.score)}</strong>
-		</div>
-	</div>
-
-	<div class="copy">
-		<div class="copy-head">
-			<div class="meta">
-				<span>{item.category || "Uncategorized"}</span>
-				<small>{displayHost(item.url)}</small>
-			</div>
-
-			<div class="compact-score" aria-label={`Score ${formatScore(item.score)} out of 10`}>
-				<small>Score</small>
-				<strong>{formatScore(item.score)}</strong>
-			</div>
-		</div>
-
-		<h3>{item.title || displayHost(item.url) || "Untitled site"}</h3>
-		<p>{item.summary || "Approved Veridict analysis."}</p>
-
-		{#if compact && item.topics?.length}
-			<div class="topics" aria-label="Topics">
-				{#each item.topics.slice(0, 3) as topic}
-					<span>{topic}</span>
-				{/each}
-			</div>
-		{/if}
-	</div>
-</a>
+<article class="card">
+  <div class="preview">
+    {#if src && failedSource !== src}
+      <img
+        {src}
+        alt={`Förhandsvisning av ${item.title || siteHost(item.url)}`}
+        loading="lazy"
+        decoding="async"
+        width="640"
+        height="400"
+        onerror={() => (failedSource = src)}
+      />
+    {:else}
+      <div class="fallback">
+        <span aria-hidden="true">V.</span><small>Ingen förhandsvisning</small>
+      </div>
+    {/if}
+    <span class="category">{item.category || "Webbplats"}</span>
+  </div>
+  <div class="body">
+    <div class="heading">
+      <h3>{item.title || siteHost(item.url)}</h3>
+      <div
+        class="score"
+        aria-label={`Kvalitetspoäng ${item.score?.toFixed(1) ?? "saknas"} av 10`}
+      >
+        <strong>{item.score?.toFixed(1) ?? "–"}</strong><span>/10</span>
+      </div>
+    </div>
+    <span class="host">{siteHost(item.url)}</span>
+    <p>{item.summary || "En granskad sida i Veridicts katalog."}</p>
+    {#if item.topics?.length}<ul class="topics" aria-label="Ämnen">
+        {#each item.topics.slice(0, 3) as topic}<li>{topic}</li>{/each}
+      </ul>{/if}
+    <div class="actions">
+      {#if oninspect}<button
+          type="button"
+          onclick={() => oninspect?.(item)}
+          aria-label={`Visa bedömning av ${item.title || siteHost(item.url)}`}
+          >Visa bedömning <span aria-hidden="true">→</span></button
+        >{/if}
+      {#if publicUrl(item.url)}<a
+          href={publicUrl(item.url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Besök ${siteHost(item.url)} (öppnas i ny flik)`}
+          >Besök sidan ↗</a
+        >{/if}
+    </div>
+  </div>
+</article>
 
 <style>
-	.catalog-card {
-		display: grid;
-		overflow: hidden;
-		border: 1px solid rgba(134, 154, 188, 0.17);
-		border-radius: 12px;
-		background:
-			linear-gradient(180deg, rgba(13, 27, 44, 0.96), rgba(8, 19, 32, 0.98)),
-			#0b1624;
-		color: inherit;
-		text-decoration: none;
-		box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
-		transition:
-			transform 180ms ease,
-			border-color 180ms ease,
-			box-shadow 180ms ease;
-	}
-
-	.catalog-card:hover {
-		border-color: rgba(95, 139, 255, 0.42);
-		box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
-		transform: translateY(-3px);
-	}
-
-	.catalog-card.compact {
-		grid-template-columns: clamp(136px, 22vw, 168px) minmax(0, 1fr);
-		align-items: stretch;
-		min-height: 112px;
-		border-radius: 10px;
-		box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
-	}
-
-	.catalog-card.compact:hover {
-		box-shadow: 0 18px 42px rgba(0, 0, 0, 0.26);
-		transform: translateY(-1px);
-	}
-
-	.shot {
-		position: relative;
-		overflow: hidden;
-		aspect-ratio: 16 / 9;
-		background: #06101b;
-	}
-
-	.compact .shot {
-		height: 100%;
-		min-height: 112px;
-		aspect-ratio: auto;
-	}
-
-	img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.shot-placeholder {
-		display: grid;
-		height: 100%;
-		place-items: center;
-		align-content: center;
-		gap: 8px;
-		background:
-			linear-gradient(135deg, rgba(70, 96, 136, 0.24), transparent),
-			repeating-linear-gradient(
-				-45deg,
-				rgba(255, 255, 255, 0.035) 0,
-				rgba(255, 255, 255, 0.035) 1px,
-				transparent 1px,
-				transparent 10px
-			);
-	}
-
-	.shot-placeholder span {
-		color: #667894;
-		font-size: 0.72rem;
-		font-weight: 900;
-	}
-
-	.shot-placeholder strong {
-		color: #c2d0e4;
-		font-size: 0.92rem;
-	}
-
-	.score-ring {
-		position: absolute;
-		right: 12px;
-		bottom: 12px;
-		display: grid;
-		width: 54px;
-		height: 54px;
-		place-items: center;
-		border: 2px solid rgba(87, 239, 123, 0.78);
-		border-radius: 50%;
-		background: rgba(3, 9, 16, 0.82);
-		box-shadow: 0 0 22px rgba(53, 245, 110, 0.24);
-	}
-
-	.score-ring strong {
-		color: #ffffff;
-		font-size: 1rem;
-	}
-
-	.compact .score-ring {
-		display: none;
-	}
-
-	.copy {
-		display: grid;
-		gap: 10px;
-		padding: 16px;
-		min-width: 0;
-	}
-
-	.copy-head {
-		display: grid;
-		gap: 10px;
-	}
-
-	.meta {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-	}
-
-	.meta span {
-		display: inline-grid;
-		min-height: 24px;
-		place-items: center;
-		border: 1px solid rgba(95, 139, 255, 0.32);
-		border-radius: 999px;
-		background: rgba(69, 102, 226, 0.12);
-		color: #9ebaff;
-		padding: 0 9px;
-		font-size: 0.73rem;
-		font-weight: 850;
-	}
-
-	.meta small {
-		overflow: hidden;
-		color: #8495ad;
-		font-size: 0.78rem;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.compact-score {
-		display: none;
-	}
-
-	.compact .copy {
-		align-content: start;
-		gap: 8px;
-		padding: 11px 14px 12px;
-	}
-
-	.compact .copy-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 12px;
-	}
-
-	.compact .meta {
-		justify-content: flex-start;
-		flex-wrap: wrap;
-		gap: 8px;
-		min-width: 0;
-	}
-
-	.compact .meta span {
-		min-height: 22px;
-		padding: 0 8px;
-		font-size: 0.69rem;
-	}
-
-	.compact .compact-score {
-		display: grid;
-		flex: 0 0 48px;
-		width: 48px;
-		height: 48px;
-		place-items: center;
-		align-content: center;
-		border: 2px solid rgba(87, 239, 123, 0.7);
-		border-radius: 50%;
-		background: rgba(3, 9, 16, 0.72);
-		box-shadow: 0 0 18px rgba(53, 245, 110, 0.16);
-	}
-
-	.compact-score small {
-		color: #88a0bd;
-		font-size: 0.58rem;
-		font-weight: 900;
-		line-height: 1;
-		text-transform: uppercase;
-	}
-
-	.compact-score strong {
-		color: #ffffff;
-		font-size: 0.95rem;
-		line-height: 1;
-	}
-
-	h3 {
-		margin: 0;
-		overflow: hidden;
-		color: #ffffff;
-		font-size: 1.02rem;
-		line-height: 1.25;
-		word-break: break-word;
-	}
-
-	p {
-		display: -webkit-box;
-		margin: 0;
-		overflow: hidden;
-		color: #c4cedd;
-		font-size: 0.9rem;
-		line-height: 1.5;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 3;
-		line-clamp: 3;
-	}
-
-	.compact h3 {
-		font-size: 1rem;
-	}
-
-	.compact p {
-		font-size: 0.86rem;
-		line-height: 1.42;
-		-webkit-line-clamp: 1;
-		line-clamp: 1;
-	}
-
-	.topics {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		min-width: 0;
-	}
-
-	.topics span {
-		display: inline-flex;
-		max-width: 100%;
-		min-height: 22px;
-		align-items: center;
-		overflow: hidden;
-		border: 1px solid rgba(133, 157, 192, 0.2);
-		border-radius: 999px;
-		background: rgba(133, 157, 192, 0.08);
-		color: #b7c5d8;
-		padding: 0 8px;
-		font-size: 0.69rem;
-		font-weight: 800;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	@media (max-width: 760px) {
-		.catalog-card.compact {
-			grid-template-columns: minmax(118px, 34vw) minmax(0, 1fr);
-			min-height: 104px;
-		}
-
-		.compact .shot {
-			min-height: 104px;
-			aspect-ratio: auto;
-		}
-
-		.compact .copy {
-			padding: 11px 12px;
-		}
-	}
-
-	@media (max-width: 520px) {
-		.catalog-card {
-			border-radius: 10px;
-		}
-
-		.score-ring {
-			right: 10px;
-			bottom: 10px;
-			width: 46px;
-			height: 46px;
-		}
-
-		.score-ring strong {
-			font-size: 0.9rem;
-		}
-
-		.copy {
-			padding: 14px;
-		}
-
-		.catalog-card.compact {
-			grid-template-columns: 1fr;
-			min-height: 0;
-		}
-
-		.compact .shot {
-			min-height: 0;
-			aspect-ratio: 16 / 9;
-		}
-
-		.compact p {
-			-webkit-line-clamp: 2;
-			line-clamp: 2;
-		}
-
-		.compact .copy-head {
-			display: grid;
-			gap: 10px;
-		}
-
-		.compact .compact-score {
-			display: flex;
-			width: fit-content;
-			height: 34px;
-			min-width: 78px;
-			gap: 6px;
-			justify-content: center;
-			padding: 0 10px;
-			border-radius: 999px;
-		}
-
-		.meta {
-			display: grid;
-			justify-content: stretch;
-		}
-
-		.meta small {
-			white-space: normal;
-		}
-	}
+  .card {
+    background: #fff;
+    border: 1px solid #dce5df;
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: #a5bdb0;
+    box-shadow: 0 9px 26px #243c3010;
+  }
+  .preview {
+    aspect-ratio: 8/5;
+    background: #edf1eb;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid #e6ece6;
+  }
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+  }
+  .category {
+    position: absolute;
+    left: 14px;
+    bottom: 12px;
+    background: #fffffff2;
+    border: 1px solid #dce5df;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 0.72rem;
+    font-weight: 650;
+    color: #354b40;
+  }
+  .fallback {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    color: #61746a;
+  }
+  .fallback span {
+    font-family: Georgia, serif;
+    font-size: 3rem;
+    color: #61705e;
+  }
+  .fallback small {
+    font-size: 0.8rem;
+  }
+  .body {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .heading {
+    display: flex;
+    gap: 10px;
+    align-items: start;
+    justify-content: space-between;
+  }
+  h3 {
+    margin: 0;
+    font-size: 1.08rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    color: #203d31;
+  }
+  .score {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    white-space: nowrap;
+    color: #225e49;
+  }
+  .score strong {
+    font-size: 1.3rem;
+  }
+  .score span {
+    font-size: 0.72rem;
+    color: #61705e;
+  }
+  .host {
+    font-size: 0.76rem;
+    color: #61705e;
+    margin-top: 5px;
+  }
+  p {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: #53645a;
+    margin: 16px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .topics {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0 0 20px;
+    padding: 0;
+  }
+  .topics li {
+    font-size: 0.68rem;
+    color: #52675a;
+    background: #f1f4ee;
+    border-radius: 5px;
+    padding: 4px 7px;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid #edf0eb;
+  }
+  .actions button {
+    border: 0;
+    background: none;
+    padding: 4px 0;
+    color: #24624b;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .actions a {
+    color: #64746b;
+    font-size: 0.76rem;
+    text-decoration: none;
+  }
+  .actions a:hover {
+    text-decoration: underline;
+  }
+  .actions button:hover {
+    color: #123f2c;
+  }
+  .actions :focus-visible {
+    outline: 3px solid #a5c9b7;
+    outline-offset: 4px;
+    border-radius: 3px;
+  }
 </style>

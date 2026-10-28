@@ -321,7 +321,7 @@
 	}
 
 	function isVerificationBlocked(analysis: ReviewAnalysis) {
-		return analysis.contentState === "VerificationBlocked";
+		return analysis.contentState === "VerificationBlocked" || analysis.contentState === "InsufficientContent";
 	}
 
 	function formatDate(value?: string) {
@@ -654,7 +654,7 @@
 
 							{#if isVerificationBlocked(analysis)}
 								<div class="content-warning">
-									<span>Browser verification detected</span>
+									<span>Content unavailable</span>
 									<p>
 										{analysis.contentStateReason || "This appears to be a security or human-verification page, not genuine site content. Reanalyze later or reject it; approval is blocked until real content is available."}
 									</p>
@@ -1785,3 +1785,4 @@
 		}
 	}
 </style>
+
