@@ -21,3 +21,7 @@ test('only address-like searches offer explicit analysis', () => {
   assert.equal(addressFromQuery('learn CSS fast'), '');
   assert.equal(addressFromQuery('javascript:alert(1)'), '');
 });
+
+test('initial connection estimates do not reuse slow analysis durations', () => {
+  assert.equal(waitEstimate('analysis', 0, 'connecting', 180), 5);
+});

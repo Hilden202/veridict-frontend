@@ -6,7 +6,7 @@ export function remainingSeconds(elapsed: number, estimate: number): number {
 }
 
 export function waitEstimate(kind: ActivityKind, elapsed: number, phase: ActivityPhase, previous?: number): number {
-  if (phase === 'connecting' && elapsed >= 4) return kind === 'analysis' ? 105 : 75;
+  if (phase === 'connecting') return elapsed >= 4 ? (kind === 'analysis' ? 105 : 75) : 5;
   const fallback = kind === 'analysis' ? 45 : 3;
   return Math.max(fallback, Math.min(kind === 'analysis' ? 180 : 90, Math.ceil((previous ?? fallback) * 1.25)));
 }

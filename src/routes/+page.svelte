@@ -53,12 +53,12 @@
     activitySequence += 1;
     activityStartedAt = Date.now();
     activityPhase = Date.now() - lastReadyAt < 60000 ? 'working' : 'connecting';
-    try { activityPrevious = Number(localStorage.getItem(`veridict:duration:${kind}`)) || undefined; } catch { activityPrevious = undefined; }
+    try { activityPrevious = Number(localStorage.getItem(`veridict:duration:v2:${kind}`)) || undefined; } catch { activityPrevious = undefined; }
   }
 
   function endActivity(kind: ActivityKind) {
     const seconds = (Date.now() - activityStartedAt) / 1000;
-    try { localStorage.setItem(`veridict:duration:${kind}`, String(seconds)); } catch { /* Optional timing history. */ }
+    try { localStorage.setItem(`veridict:duration:v2:${kind}`, String(seconds)); } catch { /* Optional timing history. */ }
   }
 
   async function ensureBackend() {
@@ -141,11 +141,12 @@
       if (current !== requestId) return;
       featured = data;
       categories = groups;
+      endActivity('catalog');
     } catch {
       if (current === requestId)
         error = "Katalogen kunde inte laddas. Försök igen om en stund.";
     } finally {
-      if (current === requestId) { loading = false; endActivity('catalog'); }
+      if (current === requestId) loading = false;
     }
   }
 
@@ -179,11 +180,12 @@
       if (current !== requestId) return;
       results = data;
       visibleCount = 9;
+      endActivity('search');
     } catch {
       if (current === requestId)
         error = "Sökningen kunde inte genomföras. Försök igen.";
     } finally {
-      if (current === requestId) { loading = false; endActivity('search'); }
+      if (current === requestId) loading = false;
     }
   }
 
@@ -214,13 +216,13 @@
       );
       if (!response.ok) throw new Error();
       const data = await response.json();
-      if (current === detailRequestId) selected = data;
+      if (current === detailRequestId) { selected = data; endActivity('detail'); }
     } catch {
       if (current === detailRequestId)
         detailError =
           "Bedömningen kunde inte hämtas. Försök att öppna den igen.";
     } finally {
-      if (current === detailRequestId) { detailLoading = false; endActivity('detail'); }
+      if (current === detailRequestId) detailLoading = false;
     }
   }
 
@@ -258,12 +260,13 @@
       if (!response.ok) throw new Error();
       submissionResult = await response.json();
       await showSubmission();
-    } catch {
-      submissionError =
-        "Sidan kunde inte analyseras just nu. Kontrollera adressen och försök igen.";
+      endActivity('analysis');
+    } catch (err) {
+      submissionError = err instanceof Error && ['TimeoutError', 'AbortError'].includes(err.name)
+        ? 'Svaret tog för lång tid. Bedömningen kan ha hunnit sparas – sök på samma adress igen för att hämta den.'
+        : 'Sidan kunde inte analyseras just nu. Försök igen om en stund.';
     } finally {
       submitting = false;
-      endActivity('analysis');
     }
   }
 
