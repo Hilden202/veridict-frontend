@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AnalysisPreview from '$lib/components/AnalysisPreview.svelte';
   import ActivityIndicator from '$lib/components/ActivityIndicator.svelte';
   import { addressFromQuery, type ActivityKind, type ActivityPhase } from '$lib/activity';
   import { onMount, tick } from "svelte";
@@ -138,9 +139,10 @@
       ]);
       if (!top.ok || !cats.ok) throw new Error();
       const [data, groups] = await Promise.all([top.json(), cats.json()]);
+      // Categories are independent of the active result request; keep them if a filter changed during startup.
+      categories = groups;
       if (current !== requestId) return;
       featured = data;
-      categories = groups;
       endActivity('catalog');
     } catch {
       if (current === requestId)
@@ -163,6 +165,17 @@
       await submitSite(true);
       return;
     }
+    await searchCatalog();
+  }
+
+  async function filterChanged() {
+    // Filters only read the approved catalog, even if the text looks like a URL.
+    ++detailRequestId;
+    selected = null; detailLoading = false; detailError = '';
+    await searchCatalog();
+  }
+
+  async function searchCatalog() {
     const current = ++requestId;
     loading = true;
     error = "";
@@ -346,13 +359,13 @@
       </div>
       <div class="filters">
         <label
-          >Kategori<select bind:value={category}
+          >Kategori<select bind:value={category} onchange={(event) => { category = event.currentTarget.value; filterChanged(); }} disabled={submitting || detailLoading}
             ><option value="">Alla kategorier</option
             >{#each categories as value}<option {value}>{value}</option
               >{/each}</select
           ></label
         ><label
-          >Sortera efter<select bind:value={sort}
+          >Sortera efter<select bind:value={sort} onchange={(event) => { sort = event.currentTarget.value; filterChanged(); }} disabled={submitting || detailLoading}
             ><option value="relevance">Bästa matchning</option><option
               value="top">Högst kvalitetspoäng</option
             ><option value="newest">Senast granskade</option></select
@@ -408,6 +421,7 @@
             </div>
             <p>{selected.summary}</p>
           </div>
+          {#key selected.id || selected.url}<AnalysisPreview analysis={selected} {apiBase} assetBase={assetBase} />{/key}
           <div class="metrics">
             {#each metrics as metric}<div>
                 <div class="metric-top">
