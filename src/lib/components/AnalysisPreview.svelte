@@ -23,9 +23,21 @@
     attempted = true;
     loading = true; failed = false;
     const timeout = setTimeout(() => request.abort(), 120000);
+    let forceRefresh = refresh;
     try {
       while (!request.signal.aborted) {
-        const response = await fetch(`${apiBase}/analyses/${encodeURIComponent(analysis.id)}/preview${refresh ? '?refresh=true' : ''}`, { method: 'POST', signal: request.signal });
+        let response: Response;
+        const path = `${apiBase}/analyses/${encodeURIComponent(analysis.id)}/preview${forceRefresh ? '?refresh=true' : ''}`;
+        forceRefresh = false;
+        try {
+          // A full image may be ready while thumbnail generation or browser cleanup
+          // is still running. A later request can return that available image.
+          response = await fetch(path, { method: 'POST', signal: AbortSignal.any([request.signal, AbortSignal.timeout(8000)]) });
+        } catch (error) {
+          if (request.signal.aborted) throw error;
+          if (error instanceof DOMException && error.name === 'TimeoutError') continue;
+          throw error;
+        }
         if (response.status === 202) { await new Promise(resolve => setTimeout(resolve, 3000)); continue; }
         if (!response.ok) throw new Error();
         const data = await response.json();
