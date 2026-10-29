@@ -23,7 +23,7 @@
 		displayed < 4 ? "danger" : displayed < 7 ? "warning" : "success",
 	);
 	const label = $derived(
-		displayed < 4 ? "Needs work" : displayed < 7 ? "Fair" : "Good",
+		displayed < 4 ? "Behöver förbättras" : displayed < 7 ? "Godtagbar" : "Bra",
 	);
 
 	function animateTo(target: number) {
@@ -97,7 +97,7 @@
 		<span>VERIDICT SCORE</span>
 		<strong>{loading ? "..." : displayed.toFixed(2)}</strong>
 		<small>/ 10</small>
-		<em>{loading ? "Analyzing" : label}</em>
+		<em>{loading ? "Analyserar" : label}</em>
 	</div>
 </div>
 
@@ -238,3 +238,4 @@
 		}
 	}
 </style>
+

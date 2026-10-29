@@ -33,7 +33,7 @@
 		</div>
 	{:else}
 		<ul>
-			{#each items?.length ? items : ["No findings returned for this section."] as item}
+			{#each items?.length ? items : ["Inga uppgifter i den här delen av bedömningen."] as item}
 				<li><span>{bulletIcon[variant]}</span>{item}</li>
 			{/each}
 		</ul>
@@ -188,3 +188,4 @@
 		}
 	}
 </style>
+

@@ -51,7 +51,7 @@ export function getApiEnvironmentConfig(mode: ApiEnvironmentMode): ApiEnvironmen
 			publicCatalogUrl: stripTrailingSlash(
 				env.PUBLIC_LOCAL_FRONTEND_URL || env.VITE_LOCAL_FRONTEND_URL || LOCAL_FRONTEND_FALLBACK,
 			),
-			label: "LOCAL MODE",
+			label: "LOKAL MILJÖ",
 			tone: "local",
 		};
 	}
@@ -66,7 +66,7 @@ export function getApiEnvironmentConfig(mode: ApiEnvironmentMode): ApiEnvironmen
 				env.VITE_PRODUCTION_FRONTEND_URL ||
 				PRODUCTION_FRONTEND_FALLBACK,
 		),
-		label: "PRODUCTION MODE",
+		label: "PUBLICERAD MILJÖ",
 		tone: "production",
 	};
 }
@@ -154,3 +154,4 @@ function hasBrowserStorage() {
 function isLocalFrontendHost(hostname: string) {
 	return ["localhost", "127.0.0.1", "::1"].includes(hostname);
 }
+

@@ -77,9 +77,9 @@
 	);
 
 	const tabs: { id: Tab; label: string }[] = [
-		{ id: "pending", label: "Pending" },
-		{ id: "approved", label: "Approved" },
-		{ id: "rejected", label: "Rejected" },
+		{ id: "pending", label: "Väntande" },
+		{ id: "approved", label: "Godkända" },
+		{ id: "rejected", label: "Avvisade" },
 	];
 
 	onMount(() => {
@@ -108,7 +108,7 @@
 		} catch (err) {
 			error =
 				errorFromUnknown(err) ||
-				"Could not load the review queue. Check the production review API URL and local review token.";
+				"Kunde inte hämta granskningskön. Kontrollera API-adressen och din åtkomstnyckel.";
 		} finally {
 			loading = false;
 		}
@@ -188,18 +188,18 @@
 				]);
 			}
 		} catch (err) {
-			error = `Could not ${reviewActionLabel(action)} this analysis. ${errorFromUnknown(err)}`;
+			error = `Kunde inte ${reviewActionLabel(action)} bedömningen. ${errorFromUnknown(err)}`;
 		} finally {
 			actionId = null;
 		}
 	}
 
 	function reviewActionLabel(action: ReviewAction) {
-		if (action === "remove-from-catalog") return "remove from catalog";
-		if (action === "restore-to-pending") return "restore to pending";
-		if (action === "reanalyze") return "reanalyze";
-		if (action === "delete") return "delete";
-		return action;
+		if (action === "remove-from-catalog") return "ta bort från katalogen";
+		if (action === "restore-to-pending") return "återställa till granskning";
+		if (action === "reanalyze") return "analysera om";
+		if (action === "delete") return "radera";
+		return action === "approve" ? "godkänna" : "avvisa";
 	}
 
 	async function refreshScreenshot(id: string) {
@@ -214,13 +214,13 @@
 			});
 
 			if (!response.ok) {
-				throw new Error(`Screenshot refresh returned ${response.status}`);
+				throw new Error(`Bildhämtningen gav status ${response.status}`);
 			}
 
 			const payload = (await response.json()) as ScreenshotRefreshResponse;
 
 			if (!payload.analysis) {
-				throw new Error(payload.message || "Screenshot refresh failed.");
+				throw new Error(payload.message || "Bilden kunde inte uppdateras.");
 			}
 
 			if (!payload.success) {
@@ -230,7 +230,7 @@
 
 				screenshotFailureReasons = {
 					...screenshotFailureReasons,
-					[payload.analysis.id]: reason || payload.message || "Screenshot refresh failed.",
+					[payload.analysis.id]: reason || payload.message || "Bilden kunde inte uppdateras.",
 				};
 
 				analyses = mergeAnalyses([
@@ -251,7 +251,7 @@
 			]);
 			await loadAnalyses();
 		} catch {
-			error = "Could not refresh this screenshot. See API logs for render details.";
+			error = "Kunde inte uppdatera bilden. Mer information finns i serverloggen.";
 		} finally {
 			actionId = null;
 		}
@@ -305,7 +305,7 @@
 
 	function statusLabel(status?: string) {
 		const normalized = normalizeStatus(status);
-		return normalized === "PendingReview" ? "Pending" : normalized;
+		return ({ PendingReview: "Väntar på granskning", Approved: "Godkänd", Rejected: "Avvisad", Superseded: "Ersatt" })[normalized];
 	}
 
 	function formatScore(score?: number) {
@@ -325,12 +325,12 @@
 	}
 
 	function formatDate(value?: string) {
-		if (!value) return "Unknown";
+		if (!value) return "Okänt";
 
 		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return "Unknown";
+		if (Number.isNaN(date.getTime())) return "Okänt";
 
-		return new Intl.DateTimeFormat(undefined, {
+		return new Intl.DateTimeFormat("sv-SE", {
 			month: "short",
 			day: "numeric",
 			year: "numeric",
@@ -378,7 +378,7 @@
 			analysis.replacementTargetTitle ||
 			target?.siteTitle ||
 			formatHost(analysis.replacementTargetUrl || target?.url) ||
-			"Approved entry"
+			"Godkänd sida"
 		);
 	}
 
@@ -391,7 +391,7 @@
 
 	function replacementCategory(analysis: ReviewAnalysis) {
 		const target = replacementAnalysisFor(analysis);
-		return analysis.replacementTargetCategory || target?.category || "Uncategorized";
+		return analysis.replacementTargetCategory || target?.category || "Utan kategori";
 	}
 
 	function replacementCreatedAt(analysis: ReviewAnalysis) {
@@ -453,10 +453,10 @@
 				payload.message ||
 				payload.detail ||
 				payload.title ||
-				`Review API returned ${response.status}`
+				`Gransknings-API:et gav status ${response.status}`
 			);
 		} catch {
-			return `Review API returned ${response.status}`;
+			return `Gransknings-API:et gav status ${response.status}`;
 		}
 	}
 
@@ -467,10 +467,10 @@
 </script>
 
 <svelte:head>
-	<title>Veridict Review Queue</title>
+	<title>Veridicts granskningskö</title>
 	<meta
 		name="description"
-		content="Internal Veridict moderation dashboard for reviewing generated analyses."
+		content="Intern granskning av Veridicts AI-genererade bedömningar."
 	/>
 </svelte:head>
 
@@ -479,23 +479,23 @@
 		<section class="access-panel">
 			<span class="mark"><i></i><b></b></span>
 			<div>
-				<p>Local tool only</p>
-				<h1>Review dashboard unavailable</h1>
+				<p>Internt verktyg</p>
+				<h1>Granskningen är inte tillgänglig här</h1>
 				<span>
-					This moderation surface only runs from local development or an explicitly
-					enabled internal environment.
+					Granskningsverktyget kräver en lokal utvecklingsmiljö eller en aktiverad
+					intern miljö.
 				</span>
 			</div>
 		</section>
 	{:else}
 	<header class="topbar">
 		<div class="brand-block">
-			<a href="/" aria-label="Back to Veridict home">
+			<a href="/" aria-label="Till Veridicts startsida">
 				<span class="mark"><i></i><b></b></span>
 			</a>
 			<div>
-				<p>Internal moderation</p>
-				<h1>Veridict Review Queue</h1>
+				<p>Intern granskning</p>
+				<h1>Veridicts granskningskö</h1>
 				<span class="api-source">{activeEnvironment.label}: {activeEnvironment.apiBaseUrl}</span>
 			</div>
 		</div>
@@ -503,14 +503,14 @@
 		<div class="topbar-tools">
 			<div class="environment-control" data-mode={apiMode}>
 				<span class="environment-badge">{activeEnvironment.label}</span>
-				<div class="environment-switch" aria-label="Moderation API environment">
+				<div class="environment-switch" aria-label="Miljö för gransknings-API">
 					<button
 						class:active={apiMode === "local"}
 						disabled={loading || Boolean(actionId)}
 						onclick={() => selectApiMode("local")}
 						type="button"
 					>
-						Local
+						Lokalt
 					</button>
 					<button
 						class:active={apiMode === "production"}
@@ -518,21 +518,21 @@
 						onclick={() => selectApiMode("production")}
 						type="button"
 					>
-						Production
+						Publicerad
 					</button>
 				</div>
 				<a href={activeEnvironment.publicCatalogUrl} target="_blank" rel="noreferrer">
-					Open public catalog
+					Öppna katalogen
 				</a>
 			</div>
 
-			<div class="counters" aria-label="Review status counters">
+			<div class="counters" aria-label="Antal per granskningsstatus">
 				<button
 					class:active={activeTab === "pending"}
 					onclick={() => (activeTab = "pending")}
 					type="button"
 				>
-					<span>Pending</span>
+					<span>Väntande</span>
 					<strong>{pendingCount}</strong>
 				</button>
 				<button
@@ -540,7 +540,7 @@
 					onclick={() => (activeTab = "approved")}
 					type="button"
 				>
-					<span>Approved</span>
+					<span>Godkända</span>
 					<strong>{approvedCount}</strong>
 				</button>
 				<button
@@ -548,25 +548,25 @@
 					onclick={() => (activeTab = "rejected")}
 					type="button"
 				>
-					<span>Rejected</span>
+					<span>Avvisade</span>
 					<strong>{rejectedCount}</strong>
 				</button>
 			</div>
 		</div>
 	</header>
 
-	<section class="controls" aria-label="Review controls">
+	<section class="controls" aria-label="Granskningsval">
 		<label class="search-field">
-			<span>Search</span>
+			<span>Sök</span>
 			<input
 				bind:this={queryInput}
 				bind:value={query}
-				placeholder="Filter by title, URL, category or summary"
+				placeholder="Filtrera på titel, webbadress, kategori eller sammanfattning"
 				type="search"
 			/>
 			{#if query}
 				<button
-					aria-label="Clear queue filter"
+					aria-label="Rensa filtret"
 					class="input-clear"
 					onclick={clearQuery}
 					type="button"
@@ -576,7 +576,7 @@
 			{/if}
 		</label>
 
-		<nav class="tabs" aria-label="Review status tabs">
+		<nav class="tabs" aria-label="Granskningsstatus">
 			{#each tabs as tab}
 				<button
 					class:active={activeTab === tab.id}
@@ -593,7 +593,7 @@
 		<section class="notice error" role="alert">
 			<span>!</span>
 			<p>{error}</p>
-			<button onclick={loadAnalyses} type="button">Retry</button>
+			<button onclick={loadAnalyses} type="button">Försök igen</button>
 		</section>
 	{/if}
 
@@ -601,10 +601,10 @@
 		<div class="panel-heading">
 			<div>
 				<span>{statusLabel(activeTab === "pending" ? "PendingReview" : activeTab === "approved" ? "Approved" : "Rejected")}</span>
-				<strong>{filteredAnalyses.length} items</strong>
+				<strong>{filteredAnalyses.length} bedömningar</strong>
 			</div>
 			<button onclick={loadAnalyses} disabled={loading} type="button">
-				{loading ? "Refreshing" : "Refresh"}
+				{loading ? "Uppdaterar" : "Uppdatera"}
 			</button>
 		</div>
 
@@ -622,13 +622,13 @@
 								{#if screenshotSource(analysis)}
 									<img
 									src={screenshotSource(analysis)}
-									alt={`Screenshot for ${analysis.siteTitle || analysis.url || "analysis"}`}
+									alt={`Skärmbild av ${analysis.siteTitle || analysis.url || "sidan"}`}
 									onerror={() => markImageFailed(analysis.id)}
 								/>
 								{:else}
 									<div class="thumbnail-placeholder">
 										<span>WEBP</span>
-										<strong>{imageFailures.includes(analysis.id) ? "Preview unavailable" : "No screenshot"}</strong>
+										<strong>{imageFailures.includes(analysis.id) ? "Bilden kan inte visas" : "Ingen bild"}</strong>
 									</div>
 								{/if}
 							</div>
@@ -636,7 +636,7 @@
 						<div class="analysis-main">
 							<div class="analysis-topline">
 								<div class="site-copy">
-									<h2>{analysis.siteTitle || "Untitled site"}</h2>
+									<h2>{analysis.siteTitle || "Sida utan titel"}</h2>
 									<a href={analysis.url} target="_blank" rel="noreferrer">
 										{analysis.url}
 									</a>
@@ -644,7 +644,7 @@
 
 								<div class="badges">
 									<span class="score-badge" data-tone={scoreTone(analysis.score)}
-										>{isVerificationBlocked(analysis) ? "Blocked" : formatScore(analysis.score)}</span
+										>{isVerificationBlocked(analysis) ? "Kan inte bedömas" : formatScore(analysis.score)}</span
 									>
 									<span class="status-badge" data-status={normalizeStatus(analysis.status)}
 										>{statusLabel(analysis.status)}</span
@@ -654,43 +654,43 @@
 
 							{#if isVerificationBlocked(analysis)}
 								<div class="content-warning">
-									<span>Content unavailable</span>
+									<span>Innehållet kunde inte läsas</span>
 									<p>
-										{analysis.contentStateReason || "This appears to be a security or human-verification page, not genuine site content. Reanalyze later or reject it; approval is blocked until real content is available."}
+										{analysis.contentStateReason || "Innehållet kunde inte läsas eller blockerades av en säkerhetskontroll. Analysera igen senare eller avvisa. Sidan kan godkännas när innehållet går att bedöma."}
 									</p>
 								</div>
 							{/if}
 
 							<div class="meta-line">
-								<span>{analysis.category || "Uncategorized"}</span>
+								<span>{analysis.category || "Utan kategori"}</span>
 								<i></i>
-								<span>Analyzed {formatDate(analysisTimestamp(analysis))}</span>
+								<span>Analyserad {formatDate(analysisTimestamp(analysis))}</span>
 								{#if hasSeparateCreatedAt(analysis)}
 									<i></i>
-									<span>Created {formatDate(analysis.createdAt)}</span>
+									<span>Skapad {formatDate(analysis.createdAt)}</span>
 								{/if}
 							</div>
 
 							{#if analysis.hasPendingDuplicates || analysis.alreadyApprovedInProduction || analysis.replacementTargetId}
 								<div class="queue-flags">
 									{#if analysis.hasPendingDuplicates}
-										<span>{analysis.pendingDuplicateCount} pending duplicates</span>
+										<span>{analysis.pendingDuplicateCount} väntande dubbletter</span>
 									{/if}
 									{#if analysis.alreadyApprovedInProduction}
-										<span>Approved in production</span>
+										<span>Godkänd i den publicerade katalogen</span>
 									{/if}
 									{#if analysis.replacementTargetId}
-										<span>Replaces {analysis.replacementTargetTitle || "approved entry"}</span>
+										<span>Ersätter {analysis.replacementTargetTitle || "godkänd sida"}</span>
 									{/if}
 								</div>
 							{/if}
 
 							{#if normalizeStatus(analysis.status) === "PendingReview" && analysis.replacementTargetId}
 								<div class="replacement-comparison">
-									<span>Replaces approved analysis</span>
+                                    <span>Ersätter godkänd bedömning</span>
 									<p>
 										<strong>{replacementTitle(analysis)}</strong>
-										<em>Score {formatScore(replacementScore(analysis))}</em>
+										<em>Poäng {formatScore(replacementScore(analysis))}</em>
 										<em>{replacementCategory(analysis)}</em>
 										{#if replacementTimestamp(analysis)}
 											<em>{formatDate(replacementTimestamp(analysis))}</em>
@@ -701,12 +701,12 @@
 
 							{#if screenshotFailureReason(analysis.id)}
 								<div class="screenshot-failure">
-									<span>Screenshot failed</span>
+									<span>Bilden kunde inte hämtas</span>
 									<p>{screenshotFailureReason(analysis.id)}</p>
 								</div>
 							{/if}
 
-							<p class="summary">{analysis.summary || "No summary returned."}</p>
+							<p class="summary">{analysis.summary || "Ingen sammanfattning."}</p>
 						</div>
 
 						<div class="actions">
@@ -716,7 +716,7 @@
 								onclick={() => refreshScreenshot(analysis.id)}
 								type="button"
 							>
-								Refresh shot
+								Uppdatera bild
 							</button>
 
 							{#if normalizeStatus(analysis.status) === "PendingReview"}
@@ -726,7 +726,7 @@
 									onclick={() => reviewAction(analysis.id, "reanalyze")}
 									type="button"
 								>
-									Reanalyze
+									Analysera igen
 								</button>
 								<button
 									class="approve"
@@ -734,7 +734,7 @@
 									onclick={() => reviewAction(analysis.id, "approve")}
 									type="button"
 								>
-									Approve
+									Godkänn
 								</button>
 								<button
 									class="reject"
@@ -742,7 +742,7 @@
 									onclick={() => reviewAction(analysis.id, "reject")}
 									type="button"
 								>
-									Reject
+									Avvisa
 								</button>
 							{/if}
 
@@ -753,7 +753,7 @@
 									onclick={() => reviewAction(analysis.id, "remove-from-catalog")}
 									type="button"
 								>
-									Remove from catalog
+									Ta bort från katalogen
 								</button>
 							{/if}
 
@@ -764,7 +764,7 @@
 									onclick={() => reviewAction(analysis.id, "restore-to-pending")}
 									type="button"
 								>
-									Restore to pending
+									Återställ till granskning
 								</button>
 								<button
 									class="delete"
@@ -772,7 +772,7 @@
 									onclick={() => reviewAction(analysis.id, "delete")}
 									type="button"
 								>
-									Delete analysis
+									Radera bedömning
 								</button>
 							{/if}
 						</div>
@@ -781,8 +781,8 @@
 			</div>
 		{:else}
 			<div class="empty-state">
-				<strong>No {tabs.find((tab) => tab.id === activeTab)?.label.toLowerCase()} analyses</strong>
-				<p>{activeTab === "pending" ? "No generated analyses are waiting for review." : "Nothing matches this catalog state yet."}</p>
+				<strong>Inga {tabs.find((tab) => tab.id === activeTab)?.label.toLowerCase()} bedömningar</strong>
+				<p>{activeTab === "pending" ? "Inga bedömningar väntar på granskning." : "Inga bedömningar matchar det här valet."}</p>
 			</div>
 		{/if}
 	</section>

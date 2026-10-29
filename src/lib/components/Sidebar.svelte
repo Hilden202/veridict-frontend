@@ -3,8 +3,8 @@
 	import { isLocalFrontendRuntime } from "$lib/apiEnvironment";
 
 	const navItems = [
-		{ label: "Search", icon: "⌕", href: "#search", active: true },
-		{ label: "Analyze", icon: "⌂", href: "#analyze" },
+		{ label: "Sök", icon: "⌕", href: "#search", active: true },
+		{ label: "Analysera", icon: "⌂", href: "#analyze" },
 	];
 
 	let showModerationShortcut = $state(false);
@@ -14,8 +14,8 @@
 	});
 </script>
 
-<aside class="sidebar" aria-label="Primary navigation">
-	<a class="brand" href="/" aria-label="Veridict home">
+<aside class="sidebar" aria-label="Huvudmeny">
+	<a class="brand" href="/" aria-label="Veridicts startsida">
 		<span class="veridict-mark"><i></i><b></b></span>
 		<strong>Veridict</strong>
 	</a>
@@ -30,8 +30,8 @@
 		{#if showModerationShortcut}
 			<a class="dev-shortcut" href="/internal/review">
 				<span>▦</span>
-				Review
-				<em>LOCAL</em>
+				Granskning
+				<em>LOKALT</em>
 			</a>
 		{/if}
 	</nav>
